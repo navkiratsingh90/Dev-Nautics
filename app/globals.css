@@ -80,6 +80,23 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --color-oceanBlue: #1CA9C9;
+  --color-sunsetOrange: #FF4500;
+  --color-forestGreen: #228B22;
+  --color-lavender: #E6E6FA;
+  --color-lightBlue: #35aecf;
+  --color-darkBlue: #0f172a;
+  --color-coralPink: #FF7F50;
+  --color-customGray: #3A3A3A;
+  --color-oceanBlue: #0B5566;
+  --color-sunsetOrange: #CC3700;
+  --color-forestGreen: #176B17;
+  --color-lavender: #CFCFFB;
+  --color-golden: #E6C200;
+  --color-midnight: #0F103B;
+  --color-coralPink: #CC6642;
+  --color-customGray: #1F1F1F;
+  --color-white: #ffffff;
 }
 
 .dark {
