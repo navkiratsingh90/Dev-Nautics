@@ -1,54 +1,75 @@
-import User from "@/models/user-model";
+import connectDb from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcrypt";
-// import { connectDB } from "@/lib/db"; // make sure you have this
+import User from "@/models/user-model";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { sendMail } from "@/lib/send-mail";
 
 export async function POST(req: NextRequest) {
   try {
-    // await connectDB();
-
     const { username, email, password } = await req.json();
 
-    // ✅ Proper validation
     if (!username || !email || !password) {
       return NextResponse.json(
-        { success: false, message: "All fields are required" },
+        {
+          success: false,
+          message: "All fields are required",
+        },
         { status: 400 }
       );
     }
 
-    // ✅ Check existing user
+    await connectDb();
+
     const existingUser = await User.findOne({ email });
 
-    if (existingUser) {
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // User already verified
+    if (existingUser?.isVerified) {
       return NextResponse.json(
-        { success: false, message: "Email already registered" },
-        { status: 409 }
+        {
+          success: false,
+          message: "User already exists",
+        },
+        { status: 400 }
       );
     }
 
-    // ✅ Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // User exists but not verified
+    if (existingUser && !existingUser.isVerified) {
+      existingUser.username = username;
+      existingUser.password = hashedPassword;
+      existingUser.verificationCode = otp;
+      existingUser.verificationExpiry = otpExpiry;
 
-    // ✅ Create user
-    const newUser = await User.create({
-      username,
+      await existingUser.save();
+    } else {
+      await User.create({
+        username,
+        email,
+        password: hashedPassword,
+
+        verificationCode: otp,
+        verificationExpiry: otpExpiry,
+
+        isVerified: false,
+      });
+    }
+
+    await sendMail(
       email,
-      password: hashedPassword,
-    });
-
-    // ✅ Remove password before sending response
-    const userWithoutPassword = {
-      _id: newUser._id,
-      username: newUser.username,
-      email: newUser.email,
-    };
+      `Your verification OTP is ${otp}. It will expire in 10 minutes.`
+    );
 
     return NextResponse.json(
       {
         success: true,
-        message: "User registered successfully",
-        data: userWithoutPassword,
+        message: "OTP sent successfully",
+        email,
       },
       { status: 201 }
     );
@@ -56,8 +77,18 @@ export async function POST(req: NextRequest) {
     console.error(error);
 
     return NextResponse.json(
-      { success: false, message: "Server error" },
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
       { status: 500 }
     );
   }
+}
+
+function generateOTP(length = 6) {
+  const min = Math.pow(10, length - 1);
+  const max = Math.pow(10, length) - 1;
+
+  return crypto.randomInt(min, max + 1).toString();
 }

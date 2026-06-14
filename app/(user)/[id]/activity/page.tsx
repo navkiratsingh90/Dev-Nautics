@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useState, useRef, ChangeEvent, useEffect } from "react";
-import { useAppSelector } from "@/redux/hooks";
+import React, { useState, useRef, ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Sparkles, Image, Video, X } from "lucide-react";
-import { ActivityCard } from "@/components/ActivityCard";
+import { Image, Video, X } from "lucide-react";
 
-// Types (match the ActivityCard's expected types)
+// Types
 interface User {
   _id: string;
   username: string;
@@ -31,7 +29,7 @@ interface Activity {
   isBookmarked: boolean;
 }
 
-// Mock data – replace with real API calls
+// Mock data
 const MOCK_ACTIVITIES: Activity[] = [
   {
     _id: "1",
@@ -46,7 +44,6 @@ const MOCK_ACTIVITIES: Activity[] = [
   {
     _id: "2",
     description: "Writing a deep dive on useMemo vs useCallback – most devs over‑memoize. Blog post dropping this week.",
-    // file: null,
     likes: [{ _id: "u3", username: "mikej" }],
     comments: [],
     createdBy: { _id: "u2", username: "sarahc", avatar: "SC" },
@@ -55,9 +52,126 @@ const MOCK_ACTIVITIES: Activity[] = [
   },
 ];
 
+// Helper: time ago
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+// Activity Card Component (simplified)
+function ActivityCard({
+  post,
+  currentUserId,
+  onLike,
+  onBookmark,
+  onDelete,
+  onComment,
+}: {
+  post: Activity;
+  currentUserId: string;
+  onLike: (id: string) => void;
+  onBookmark: (id: string) => void;
+  onDelete: (id: string) => void;
+  onComment: (id: string, text: string) => void;
+}) {
+  const [showComment, setShowComment] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const isLiked = post.likes.some((u) => u._id === currentUserId);
+  const isOwn = post.createdBy._id === currentUserId;
+
+  const handleAddComment = () => {
+    if (!commentText.trim()) return;
+    onComment(post._id, commentText);
+    setCommentText("");
+    setShowComment(false);
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5">
+      <div className="flex gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center text-gray-700 font-bold shrink-0">
+          {post.createdBy.username.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="flex-1">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="font-semibold text-gray-900">{post.createdBy.username}</span>
+              <span className="text-xs text-gray-400 ml-2">{timeAgo(post.createdAt)}</span>
+            </div>
+            {isOwn && (
+              <button onClick={() => onDelete(post._id)} className="text-gray-400 hover:text-red-500">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-gray-700 text-sm mt-2">{post.description}</p>
+          {post.file && (
+            <img src={post.file} alt="post" className="mt-3 rounded-xl w-full max-h-80 object-cover border border-gray-200" />
+          )}
+          <div className="flex items-center gap-4 mt-4 pt-2 border-t border-gray-100">
+            <button
+              onClick={() => onLike(post._id)}
+              className={`flex items-center gap-1 text-xs ${isLiked ? "text-green-600" : "text-gray-500 hover:text-green-600"}`}
+            >
+              ❤️ {post.likes.length}
+            </button>
+            <button
+              onClick={() => setShowComment(!showComment)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+            >
+              💬 {post.comments.length}
+            </button>
+            <button
+              onClick={() => onBookmark(post._id)}
+              className={`flex items-center gap-1 text-xs ${post.isBookmarked ? "text-green-600" : "text-gray-500 hover:text-green-600"}`}
+            >
+              🔖 Save
+            </button>
+          </div>
+          {showComment && (
+            <div className="mt-3 pt-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Write a comment..."
+                  className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+                <button
+                  onClick={handleAddComment}
+                  className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                >
+                  Post
+                </button>
+              </div>
+            </div>
+          )}
+          {post.comments.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {post.comments.slice(0, 2).map((c) => (
+                <div key={c._id} className="text-xs text-gray-600">
+                  <span className="font-medium text-gray-800">{c.createdBy.username}</span> {c.content}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main Feed Page
 export default function FeedPage() {
-  const darkMode = useAppSelector((state: any) => state.Theme.darkMode);
-  const currentUserId = "currentUser"; // Replace with real auth selector
+  const currentUserId = "currentUser";
 
   const [activities, setActivities] = useState<Activity[]>(MOCK_ACTIVITIES);
   const [newPostText, setNewPostText] = useState("");
@@ -65,9 +179,7 @@ export default function FeedPage() {
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handlers for ActivityCard callbacks
-  const handleLike = async (postId: string) => {
-    // Optimistic update
+  const handleLike = (postId: string) => {
     setActivities((prev) =>
       prev.map((post) => {
         if (post._id === postId) {
@@ -82,27 +194,22 @@ export default function FeedPage() {
         return post;
       })
     );
-    // In a real app, call API: await likeActivity(postId);
   };
 
-  const handleBookmark = async (postId: string) => {
+  const handleBookmark = (postId: string) => {
     setActivities((prev) =>
       prev.map((post) =>
-        post._id === postId
-          ? { ...post, isBookmarked: !post.isBookmarked }
-          : post
+        post._id === postId ? { ...post, isBookmarked: !post.isBookmarked } : post
       )
     );
-    // await bookmarkActivity(postId);
   };
 
-  const handleDelete = async (postId: string) => {
+  const handleDelete = (postId: string) => {
     setActivities((prev) => prev.filter((p) => p._id !== postId));
-    // await deleteActivity(postId);
+    toast.info("Post deleted");
   };
 
-  const handleComment = async (postId: string, commentText: string) => {
-    // Optimistically add comment
+  const handleComment = (postId: string, commentText: string) => {
     const newComment: Comment = {
       _id: Date.now().toString(),
       content: commentText,
@@ -111,15 +218,11 @@ export default function FeedPage() {
     };
     setActivities((prev) =>
       prev.map((post) =>
-        post._id === postId
-          ? { ...post, comments: [...post.comments, newComment] }
-          : post
+        post._id === postId ? { ...post, comments: [...post.comments, newComment] } : post
       )
     );
-    // await addComment(postId, commentText);
   };
 
-  // Create new post
   const handleMediaSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -133,19 +236,18 @@ export default function FeedPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmitPost = async () => {
+  const handleSubmitPost = () => {
     if (!newPostText.trim()) {
       toast.error("Please write something");
       return;
     }
-    // Simulate API call
     const newActivity: Activity = {
       _id: Date.now().toString(),
       description: newPostText,
       file: mediaPreview || undefined,
       likes: [],
       comments: [],
-      createdBy: { _id: currentUserId, username: "currentuser", avatar: "ME" },
+      createdBy: { _id: currentUserId, username: "currentuser" },
       createdAt: new Date().toISOString(),
       isBookmarked: false,
     };
@@ -156,122 +258,87 @@ export default function FeedPage() {
     toast.success("Post published!");
   };
 
-  // Theme tokens (consistent with other pages)
-  const bg = darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-800";
-  const cardBg = darkMode ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-200";
-  const mutedText = darkMode ? "text-gray-400" : "text-gray-500";
-  const headingText = darkMode ? "text-white" : "text-gray-900";
-  const accentGradient = "from-violet-500 via-fuchsia-500 to-cyan-400";
-
   return (
-    <div className={`min-h-screen ${bg} transition-colors duration-300 font-sans`}>
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-        {/* Hero Header */}
+    <div className="bg-gray-50 min-h-screen font-sans py-8 px-4">
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header */}
         <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium bg-violet-500/10 border-violet-500/30 text-violet-400">
-            <Sparkles className="w-3.5 h-3.5" />
-            Developer Network
-          </div>
-          <h1 className={`text-3xl sm:text-4xl font-extrabold tracking-tight mt-2 ${headingText}`}>
-            Activity Feed
-          </h1>
-          <p className={`text-sm mt-1 ${mutedText}`}>
-            Connect, collaborate, and grow together
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Activity Feed</h1>
+          <p className="text-sm text-gray-500 mt-1">Connect, collaborate, and grow together</p>
         </div>
 
-        {/* Create Post Card (always visible) */}
-        <div className={`group relative rounded-2xl border transition-all duration-300 hover:shadow-xl ${cardBg}`}>
-          <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accentGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-t-2xl`} />
-          <div className="p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white font-bold shadow-md">
-                ME
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${headingText}`}>Current User</p>
-                <p className={`text-xs ${mutedText}`}>Share what you're working on...</p>
-              </div>
+        {/* Create Post Card */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center text-gray-700 font-bold">
+              ME
             </div>
-
-            <textarea
-              value={newPostText}
-              onChange={(e) => setNewPostText(e.target.value)}
-              placeholder="What's on your mind?"
-              rows={3}
-              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-all focus:ring-2 focus:ring-violet-500/30 resize-none ${
-                darkMode
-                  ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-violet-500/60"
-                  : "bg-gray-50 border-gray-200 text-gray-900 focus:border-violet-400"
-              }`}
-            />
-
-            {mediaPreview && (
-              <div className="relative rounded-xl overflow-hidden">
-                {mediaFile?.type.startsWith("video") ? (
-                  <video src={mediaPreview} controls className="w-full max-h-64 object-cover" />
-                ) : (
-                  <img src={mediaPreview} alt="preview" className="w-full max-h-64 object-cover" />
-                )}
-                <button
-                  onClick={removeMedia}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex gap-2">
-                <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all hover:scale-105 ${
-                  darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}>
-                  <Image className="w-3.5 h-3.5" />
-                  <input type="file" accept="image/*" onChange={handleMediaSelect} className="hidden" ref={fileInputRef} />
-                  Image
-                </label>
-                <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-all hover:scale-105 ${
-                  darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}>
-                  <Video className="w-3.5 h-3.5" />
-                  <input type="file" accept="video/*" onChange={handleMediaSelect} className="hidden" />
-                  Video
-                </label>
-              </div>
+            <div>
+              <div className="font-medium text-gray-900">Current User</div>
+              <div className="text-xs text-gray-500">Share what you're working on...</div>
+            </div>
+          </div>
+          <textarea
+            value={newPostText}
+            onChange={(e) => setNewPostText(e.target.value)}
+            placeholder="What's on your mind?"
+            rows={3}
+            className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-green-500"
+          />
+          {mediaPreview && (
+            <div className="relative mt-3 rounded-xl overflow-hidden">
+              <img src={mediaPreview} alt="preview" className="w-full max-h-64 object-cover" />
               <button
-                onClick={handleSubmitPost}
-                disabled={!newPostText.trim()}
-                className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all hover:scale-[1.02] ${
-                  newPostText.trim()
-                    ? `bg-gradient-to-r ${accentGradient} text-white shadow-md hover:shadow-lg`
-                    : `${darkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-400"} cursor-not-allowed`
-                }`}
+                onClick={removeMedia}
+                className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-black/70"
               >
-                Post
+                <X className="w-4 h-4" />
               </button>
             </div>
+          )}
+          <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
+            <div className="flex gap-2">
+              <label className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 cursor-pointer hover:bg-gray-50">
+                <Image className="w-3.5 h-3.5" />
+                <input type="file" accept="image/*" onChange={handleMediaSelect} className="hidden" ref={fileInputRef} />
+                Image
+              </label>
+              <label className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 cursor-pointer hover:bg-gray-50">
+                <Video className="w-3.5 h-3.5" />
+                <input type="file" accept="video/*" onChange={handleMediaSelect} className="hidden" />
+                Video
+              </label>
+            </div>
+            <button
+              onClick={handleSubmitPost}
+              disabled={!newPostText.trim()}
+              className={`px-5 py-2 rounded-xl text-sm font-medium ${
+                newPostText.trim()
+                  ? "bg-gray-900 text-white hover:bg-gray-800"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Post
+            </button>
           </div>
         </div>
 
-        {/* Feed – render ActivityCard for each post */}
+        {/* Feed */}
         {activities.length === 0 ? (
-          <div className={`text-center py-12 rounded-2xl border ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
-            <p className={mutedText}>No activities yet. Be the first to share something!</p>
+          <div className="text-center py-12 border border-gray-200 rounded-2xl bg-white">
+            <p className="text-gray-500">No activities yet. Be the first to share something!</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {activities.map((activity, idx) => (
+          <div className="space-y-5">
+            {activities.map((activity) => (
               <ActivityCard
                 key={activity._id}
                 post={activity}
-                darkMode={darkMode}
                 currentUserId={currentUserId}
                 onLike={handleLike}
                 onBookmark={handleBookmark}
                 onDelete={handleDelete}
                 onComment={handleComment}
-                index={idx}
               />
             ))}
           </div>

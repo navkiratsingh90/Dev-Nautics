@@ -2,14 +2,14 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useAppSelector } from "@/redux/hooks";
+import { toast } from "sonner";
 import {
   Plus, Search, X, Users, Clock, CheckCircle,
   TrendingUp, Filter, Star, ArrowRight,
   FolderOpen, ChevronDown, Globe, Lock,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────
 export interface ProjectMember {
   _id: string; username: string; avatar: string; role: string;
 }
@@ -19,10 +19,10 @@ export interface Project {
   progress: number; visibility: "public"|"private";
   techStack: string[]; members: ProjectMember[]; totalTasks: number;
   completedTasks: number; isStarred: boolean; lastActivity: string;
-  createdAt: string; role: string; // current user's role in this project
+  createdAt: string; role: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Mock data ─────────────────────────────────────────────────
 const MOCK_PROJECTS: Project[] = [
   {
     _id: "p1", title: "AI Code Assistant", description: "Intelligent code completion using fine-tuned LLMs. Real-time suggestions, contextual completions, and smart refactoring.",
@@ -61,371 +61,318 @@ const MOCK_PROJECTS: Project[] = [
   },
 ];
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const statusConfig: Record<string, { dot: string; cls: (d: boolean) => string }> = {
-  "Open":        { dot: "bg-green-400 animate-pulse", cls: d => d ? "bg-green-500/15 text-green-400 border-green-500/30"  : "bg-green-50 text-green-600 border-green-200"  },
-  "In Progress": { dot: "bg-blue-400 animate-pulse",  cls: d => d ? "bg-blue-500/15 text-blue-400 border-blue-500/30"    : "bg-blue-50 text-blue-600 border-blue-200"    },
-  "On Hold":     { dot: "bg-amber-400",               cls: d => d ? "bg-amber-500/15 text-amber-400 border-amber-500/30" : "bg-amber-50 text-amber-600 border-amber-200" },
-  "Completed":   { dot: "bg-gray-400",                cls: d => d ? "bg-gray-500/15 text-gray-400 border-gray-500/30"   : "bg-gray-50 text-gray-600 border-gray-200"   },
-  "Closed":      { dot: "bg-red-400",                 cls: d => d ? "bg-red-500/15 text-red-400 border-red-500/30"      : "bg-red-50 text-red-600 border-red-200"      },
-};
-const categoryColors: Record<string, string> = {
-  "AI/ML":      "bg-violet-500/15 text-violet-400 border-violet-500/30",
-  "Blockchain": "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  "IoT":        "bg-green-500/15 text-green-400 border-green-500/30",
-  "Web Dev":    "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
-  "App Dev":    "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30",
-};
-const roleColors = (d: boolean) => ({
-  "Project Lead": d ? "bg-violet-500/15 text-violet-400 border-violet-500/30" : "bg-violet-50 text-violet-600 border-violet-200",
-  "Frontend Dev": d ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"       : "bg-cyan-50 text-cyan-600 border-cyan-200",
-  "Backend Dev":  d ? "bg-blue-500/15 text-blue-400 border-blue-500/30"       : "bg-blue-50 text-blue-600 border-blue-200",
-  "Contributor":  d ? "bg-gray-500/15 text-gray-400 border-gray-500/30"       : "bg-gray-50 text-gray-600 border-gray-200",
-});
-const avatarGradients = [
-  "from-violet-500 to-fuchsia-500","from-cyan-500 to-blue-500",
-  "from-fuchsia-500 to-pink-500",  "from-amber-500 to-orange-500",
-  "from-green-500 to-emerald-500", "from-blue-500 to-violet-500",
+// ─── Helper: hash for avatar colors ───────────────────────────
+const avatarColors = [
+  "bg-purple-500", "bg-cyan-500", "bg-pink-500", "bg-amber-500", "bg-green-500", "bg-blue-500",
 ];
-const hashIdx = (s: string) => s.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % avatarGradients.length;
+const getAvatarColor = (id: string) => avatarColors[id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % avatarColors.length];
 
-// ─── Create Project Modal (arrow function) ────────────────────────────────────
-const CreateModal = ({ darkMode, onClose, onCreate }: {
-  darkMode: boolean; onClose: () => void; onCreate: (p: Project) => void;
-}) => {
-  const [form, setForm] = useState({ title: "", description: "", category: "Web Dev", visibility: "public" as "public"|"private", techStack: "" });
-  const overlayRef = React.useRef<HTMLDivElement>(null);
-  const accentGradient = "from-violet-500 via-fuchsia-500 to-cyan-400";
-  const inputCls = `w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-all focus:ring-2 focus:ring-violet-500/30 ${darkMode ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-violet-500/60" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-violet-400"}`;
-  const labelCls = `block text-xs font-semibold mb-1.5 ${darkMode ? "text-gray-300" : "text-gray-700"}`;
-  const divider  = darkMode ? "border-gray-800" : "border-gray-100";
+// ─── Status and category config (simple) ──────────────────────
+const statusStyles: Record<string, { bg: string; text: string }> = {
+  "Open": { bg: "bg-green-100", text: "text-green-700" },
+  "In Progress": { bg: "bg-blue-100", text: "text-blue-700" },
+  "On Hold": { bg: "bg-amber-100", text: "text-amber-700" },
+  "Completed": { bg: "bg-gray-100", text: "text-gray-700" },
+  "Closed": { bg: "bg-red-100", text: "text-red-700" },
+};
+const categoryStyles: Record<string, string> = {
+  "AI/ML": "bg-purple-100 text-purple-700",
+  "Blockchain": "bg-amber-100 text-amber-700",
+  "IoT": "bg-green-100 text-green-700",
+  "Web Dev": "bg-cyan-100 text-cyan-700",
+  "App Dev": "bg-pink-100 text-pink-700",
+};
+const roleStyles: Record<string, string> = {
+  "Project Lead": "bg-purple-100 text-purple-700",
+  "Frontend Dev": "bg-cyan-100 text-cyan-700",
+  "Backend Dev": "bg-blue-100 text-blue-700",
+  "Contributor": "bg-gray-100 text-gray-700",
+};
 
-  const submit = (e: React.FormEvent) => {
+// ─── Simple Modal for creating project ────────────────────────
+function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (p: Project) => void }) {
+  const [form, setForm] = useState({
+    title: "", description: "", category: "Web Dev", visibility: "public" as "public" | "private",
+    techStack: "",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
-    onCreate({
-      _id: `p${Date.now()}`, title: form.title, description: form.description,
-      category: form.category, status: "Open", progress: 0, visibility: form.visibility,
+    if (!form.title.trim()) {
+      toast.error("Project name is required");
+      return;
+    }
+    const newProject: Project = {
+      _id: `p${Date.now()}`,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      category: form.category,
+      status: "Open",
+      progress: 0,
+      visibility: form.visibility,
       techStack: form.techStack.split(",").map(t => t.trim()).filter(Boolean),
       members: [{ _id: "me", username: "you", avatar: "ME", role: "Project Lead" }],
-      totalTasks: 0, completedTasks: 0, isStarred: false, lastActivity: "just now",
-      createdAt: new Date().toISOString().slice(0, 10), role: "Project Lead",
-    });
+      totalTasks: 0,
+      completedTasks: 0,
+      isStarred: false,
+      lastActivity: "just now",
+      createdAt: new Date().toISOString().slice(0, 10),
+      role: "Project Lead",
+    };
+    onCreate(newProject);
     onClose();
+    toast.success("Project created!");
   };
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
-      onClick={e => { if (e.target === overlayRef.current) onClose(); }}>
-      <div className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
-        style={{ animation: "slideUp 0.22s ease both" }}>
-        <div className={`flex items-center justify-between px-6 py-5 border-b ${divider}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className={`text-base font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>Create new project</h2>
-            <p className={`text-xs mt-0.5 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>Set up your project workspace and invite collaborators</p>
+            <h2 className="text-lg font-bold text-gray-900">Create new project</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Set up your project workspace</p>
           </div>
-          <button onClick={onClose} className={`w-8 h-8 rounded-full flex items-center justify-center ${darkMode ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}>
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className={labelCls}>Project name <span className="text-red-400">*</span></label>
-            <input className={inputCls} placeholder="e.g. AI Health Tracker" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project name *</label>
+            <input className="w-full px-3 py-2 border border-gray-200 rounded-lg" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
           </div>
           <div>
-            <label className={labelCls}>Description</label>
-            <textarea rows={3} className={`${inputCls} resize-none`} placeholder="What are you building?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Category</label>
-              <div className="relative">
-                <select className={`${inputCls} pr-8 appearance-none`} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                  {["AI/ML", "Web Dev", "Blockchain", "IoT", "App Dev"].map(c => <option key={c}>{c}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400" />
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select className="w-full px-3 py-2 border border-gray-200 rounded-lg" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {["AI/ML", "Web Dev", "Blockchain", "IoT", "App Dev"].map(c => <option key={c}>{c}</option>)}
+              </select>
             </div>
             <div>
-              <label className={labelCls}>Visibility</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["public", "private"] as const).map(v => (
-                  <button key={v} type="button" onClick={() => setForm(f => ({ ...f, visibility: v }))}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-medium transition-all ${form.visibility === v ? `bg-gradient-to-r ${accentGradient} text-white border-transparent` : `${darkMode ? "border-gray-700 text-gray-400 hover:bg-gray-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}`}>
-                    {v === "public" ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </button>
-                ))}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setForm(f => ({ ...f, visibility: "public" }))} className={`flex-1 py-1.5 text-sm rounded-lg border ${form.visibility === "public" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-200"}`}>Public</button>
+                <button type="button" onClick={() => setForm(f => ({ ...f, visibility: "private" }))} className={`flex-1 py-1.5 text-sm rounded-lg border ${form.visibility === "private" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-200"}`}>Private</button>
               </div>
             </div>
           </div>
           <div>
-            <label className={labelCls}>Tech stack <span className={`font-normal ${darkMode ? "text-gray-500" : "text-gray-400"}`}>(comma-separated)</span></label>
-            <input className={inputCls} placeholder="React, Node.js, MongoDB" value={form.techStack} onChange={e => setForm(f => ({ ...f, techStack: e.target.value }))} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tech stack (comma separated)</label>
+            <input className="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="React, Node.js, MongoDB" value={form.techStack} onChange={e => setForm(f => ({ ...f, techStack: e.target.value }))} />
           </div>
-          <div className={`flex gap-3 pt-2 border-t ${divider}`}>
-            <button type="button" onClick={onClose} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${darkMode ? "border-gray-700 text-gray-400 hover:bg-gray-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>Cancel</button>
-            <button type="submit" className={`flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r ${accentGradient} text-white shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-[1.02] transition-all`}>Create project 🚀</button>
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button type="submit" className="flex-1 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800">Create project</button>
           </div>
         </form>
       </div>
     </div>
   );
-};
+}
 
-// ─── Project Card (arrow function) ────────────────────────────────────────────
-const ProjectCard = ({ p, darkMode, idx, onStar }: { p: Project; darkMode: boolean; idx: number; onStar: () => void }) => {
-  const sc = statusConfig[p.status];
-  const cc = categoryColors[p.category] ?? categoryColors["Web Dev"];
-  const rc = (roleColors(darkMode) as any)[p.role] ?? (darkMode ? "bg-gray-500/15 text-gray-400 border-gray-500/30" : "bg-gray-50 text-gray-600 border-gray-200");
-  const accentGradient = "from-violet-500 via-fuchsia-500 to-cyan-400";
-  const mutedText  = darkMode ? "text-gray-400" : "text-gray-500";
-  const headingText= darkMode ? "text-white"    : "text-gray-900";
-  const cardBg     = darkMode ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-200";
-  const divider    = darkMode ? "border-gray-700/50" : "border-gray-100";
+// ─── Project Card ──────────────────────────────────────────────
+function ProjectCard({ project, onStar }: { project: Project; onStar: () => void }) {
+  const statusStyle = statusStyles[project.status] || statusStyles["Open"];
+  const categoryStyle = categoryStyles[project.category] || "bg-gray-100 text-gray-700";
+  const roleStyle = roleStyles[project.role] || "bg-gray-100 text-gray-700";
+  const progress = Math.round((project.completedTasks / project.totalTasks) * 100) || 0;
 
   return (
-    <div className={`group relative rounded-2xl border overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${cardBg} ${darkMode ? "hover:border-violet-500/40 hover:shadow-violet-500/6" : "hover:border-violet-300 hover:shadow-violet-100"}`}>
-      <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accentGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-
+    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
       <div className="p-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${cc}`}>{p.category}</span>
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${sc.cls(darkMode)}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />{p.status}
-              </span>
-              {p.visibility === "private" && <Lock className={`w-3 h-3 ${mutedText}`} />}
+        <div className="flex justify-between items-start gap-3 mb-3">
+          <div>
+            <div className="flex flex-wrap gap-2 mb-1.5">
+              <span className={`text-xs px-2 py-0.5 rounded-full ${categoryStyle}`}>{project.category}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>{project.status}</span>
+              {project.visibility === "private" && <Lock className="w-3 h-3 text-gray-400" />}
             </div>
-            <h3 className={`text-base font-bold leading-snug ${headingText}`}>{p.title}</h3>
+            <h3 className="text-base font-bold text-gray-900">{project.title}</h3>
           </div>
-          <button onClick={e => { e.preventDefault(); onStar(); }}
-            className={`p-1.5 rounded-lg transition-all hover:scale-110 shrink-0 ${p.isStarred ? "text-amber-400" : `${mutedText} hover:text-amber-400`}`}>
-            <Star className={`w-4 h-4 ${p.isStarred ? "fill-amber-400" : ""}`} />
+          <button onClick={onStar} className="shrink-0">
+            <Star className={`w-5 h-5 ${project.isStarred ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
           </button>
         </div>
 
         {/* Description */}
-        <p className={`text-xs leading-relaxed mb-4 line-clamp-2 ${mutedText}`}>{p.description}</p>
+        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
 
         {/* Progress */}
         <div className="mb-4">
-          <div className="flex justify-between mb-1.5">
-            <span className={`text-[11px] ${mutedText}`}>{p.completedTasks}/{p.totalTasks} tasks</span>
-            <span className={`text-[11px] font-semibold ${headingText}`}>{p.progress}%</span>
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>{project.completedTasks}/{project.totalTasks} tasks</span>
+            <span>{progress}%</span>
           </div>
-          <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
-            <div className={`h-full rounded-full bg-gradient-to-r ${accentGradient} transition-all duration-700`} style={{ width: `${p.progress}%` }} />
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-gray-900 rounded-full" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
         {/* Tech stack */}
-        {p.techStack.length > 0 && (
+        {project.techStack.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
-            {p.techStack.slice(0, 4).map(t => (
-              <span key={t} className={`text-[11px] font-mono px-2 py-0.5 rounded-md border ${darkMode ? "bg-gray-700/60 border-gray-600 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-600"}`}>{t}</span>
+            {project.techStack.slice(0, 4).map(tech => (
+              <span key={tech} className="text-xs px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">{tech}</span>
             ))}
-            {p.techStack.length > 4 && <span className={`text-[11px] ${mutedText}`}>+{p.techStack.length - 4}</span>}
+            {project.techStack.length > 4 && <span className="text-xs text-gray-400">+{project.techStack.length - 4}</span>}
           </div>
         )}
 
         {/* Footer */}
-        <div className={`flex items-center justify-between pt-3 border-t ${divider}`}>
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {p.members.slice(0, 4).map((m, i) => (
-                <div key={m._id} className={`w-6 h-6 rounded-lg bg-gradient-to-br ${avatarGradients[hashIdx(m._id)]} flex items-center justify-center text-[9px] font-bold text-white ring-1 ${darkMode ? "ring-gray-800" : "ring-white"}`}>
+        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-1">
+              {project.members.slice(0, 3).map(m => (
+                <div key={m._id} className={`w-6 h-6 rounded-lg ${getAvatarColor(m._id)} flex items-center justify-center text-[9px] font-bold text-white ring-1 ring-white`}>
                   {m.avatar.slice(0, 1)}
                 </div>
               ))}
-              {p.members.length > 4 && <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[9px] font-bold ring-1 ${darkMode ? "bg-gray-700 text-gray-400 ring-gray-800" : "bg-gray-100 text-gray-500 ring-white"}`}>+{p.members.length - 4}</div>}
+              {project.members.length > 3 && <div className="w-6 h-6 rounded-lg bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-600 ring-1 ring-white">+{project.members.length - 3}</div>}
             </div>
-            <span className={`text-[11px] ${mutedText}`}>{p.members.length} member{p.members.length !== 1 ? "s" : ""}</span>
+            <span className="text-xs text-gray-500">{project.members.length} members</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${rc}`}>{p.role}</span>
-            <span className={`text-[11px] ${mutedText}`}>{p.lastActivity}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${roleStyle}`}>{project.role}</span>
+            <span className="text-xs text-gray-400">{project.lastActivity}</span>
           </div>
         </div>
       </div>
-
-      <Link href={`/team-workspace/${p._id}`}>
-        <div className={`flex items-center justify-between px-5 py-3 border-t ${divider} opacity-0 group-hover:opacity-100 transition-all duration-200 ${darkMode ? "bg-gray-700/30" : "bg-gray-50/80"}`}>
-          <span className={`text-xs font-semibold bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent`}>Open workspace</span>
-          <ArrowRight className="w-3.5 h-3.5 text-violet-400" />
+      <Link href={`/team-workspace/${project._id}`}>
+        <div className="px-5 py-3 border-t border-gray-100 text-sm text-gray-600 hover:bg-gray-50 flex justify-between items-center">
+          <span>Open workspace</span>
+          <ArrowRight className="w-4 h-4" />
         </div>
       </Link>
     </div>
   );
-};
+}
 
-// ─── Main Hub Page (arrow function) ──────────────────────────────────────────
-const WorkspaceHubPage = () => {
-  const darkMode = useAppSelector((state: any) => state.Theme.darkMode);
-
-  const [projects, setProjects]   = useState<Project[]>(MOCK_PROJECTS);
+// ─── Main Component ────────────────────────────────────────────
+export default function WorkspaceHubPage() {
+  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [showCreate, setShowCreate] = useState(false);
-  const [search, setSearch]       = useState("");
+  const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [activeTab, setActiveTab] = useState<"all"|"leading"|"contributing"|"starred">("all");
 
   const stats = {
-    total:       projects.length,
-    leading:     projects.filter(p => p.role === "Project Lead").length,
-    active:      projects.filter(p => ["Open","In Progress"].includes(p.status)).length,
-    completed:   projects.filter(p => p.status === "Completed").length,
+    total: projects.length,
+    leading: projects.filter(p => p.role === "Project Lead").length,
+    active: projects.filter(p => ["Open", "In Progress"].includes(p.status)).length,
+    completed: projects.filter(p => p.status === "Completed").length,
   };
 
-  const filtered = projects
-    .filter(p => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.techStack.some(t => t.toLowerCase().includes(q));
-      const matchStatus = filterStatus === "All" || p.status === filterStatus;
-      const matchTab    = activeTab === "all" ? true : activeTab === "leading" ? p.role === "Project Lead" : activeTab === "contributing" ? p.role !== "Project Lead" : p.isStarred;
-      return matchSearch && matchStatus && matchTab;
-    });
-
-  // Theme tokens
-  const bg          = darkMode ? "bg-gray-900 text-white"         : "bg-white text-gray-800";
-  const cardBg      = darkMode ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-200";
-  const mutedText   = darkMode ? "text-gray-400"                  : "text-gray-500";
-  const headingText = darkMode ? "text-white"                     : "text-gray-900";
-  const divider     = darkMode ? "border-gray-800"                : "border-gray-200";
-  const accentGradient = "from-violet-500 via-fuchsia-500 to-cyan-400";
-  const accentText     = "bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent";
+  const filtered = projects.filter(p => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.techStack.some(t => t.toLowerCase().includes(q));
+    const matchStatus = filterStatus === "All" || p.status === filterStatus;
+    const matchTab = activeTab === "all" ? true : activeTab === "leading" ? p.role === "Project Lead" : activeTab === "contributing" ? p.role !== "Project Lead" : p.isStarred;
+    return matchSearch && matchStatus && matchTab;
+  });
 
   const tabs = [
-    { key: "all",          label: "All",          count: projects.length                            },
-    { key: "leading",      label: "Leading",       count: stats.leading                              },
-    { key: "contributing", label: "Contributing",  count: projects.length - stats.leading            },
-    { key: "starred",      label: "Starred",       count: projects.filter(p => p.isStarred).length  },
+    { key: "all", label: "All", count: projects.length },
+    { key: "leading", label: "Leading", count: stats.leading },
+    { key: "contributing", label: "Contributing", count: projects.length - stats.leading },
+    { key: "starred", label: "Starred", count: projects.filter(p => p.isStarred).length },
   ] as const;
 
   return (
-    <div className={`min-h-screen ${bg} transition-colors duration-300 font-sans`}>
-      {/* Hero */}
-      <section className={`relative overflow-hidden border-b ${divider}`}>
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `linear-gradient(${darkMode ? "#fff" : "#000"} 1px, transparent 1px), linear-gradient(90deg, ${darkMode ? "#fff" : "#000"} 1px, transparent 1px)`, backgroundSize: "50px 50px" }} />
-        <div className="absolute top-0 left-1/4 w-80 h-48 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-1/3 w-64 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div>
+          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs text-green-700 mb-3">
+            <FolderOpen className="w-3.5 h-3.5" /> Team Workspace · {stats.active} active projects
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900">My Workspaces</h1>
+          <p className="text-sm text-gray-500 mt-1">All your projects in one place — track tasks, manage teams, and keep collaboration on schedule.</p>
+        </div>
 
-        <div className="relative max-w-7xl mx-auto px-6 py-12">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
-            <div>
-              <div className={`inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full border text-xs font-medium ${darkMode ? "bg-violet-500/10 border-violet-500/30 text-violet-300" : "bg-violet-50 border-violet-200 text-violet-600"}`}>
-                <FolderOpen className="w-3.5 h-3.5" /> Team Workspace · {stats.active} active project{stats.active !== 1 ? "s" : ""}
-              </div>
-              <h1 className={`text-4xl md:text-5xl font-extrabold tracking-tight leading-tight mb-3 ${headingText}`}>
-                My <span className={accentText}>Workspaces</span>
-              </h1>
-              <p className={`text-base ${mutedText} max-w-lg leading-relaxed`}>
-                All your projects in one place — track tasks, manage teams, and keep every collaboration on schedule.
-              </p>
-            </div>
-
-            {/* Stats tiles */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-              {[
-                { label: "Total",     value: stats.total,     from: "from-violet-500", to: "to-fuchsia-500" },
-                { label: "Active",    value: stats.active,    from: "from-green-500",  to: "to-emerald-500" },
-                { label: "Leading",   value: stats.leading,   from: "from-cyan-500",   to: "to-blue-500"    },
-                { label: "Done",      value: stats.completed, from: "from-gray-500",   to: "to-gray-400"    },
-              ].map((s, i) => (
-                <div key={s.label} className={`text-center px-5 py-4 rounded-2xl border ${cardBg}`}>
-                  <div className={`text-3xl font-extrabold tracking-tight bg-gradient-to-br ${s.from} ${s.to} bg-clip-text text-transparent`}>{s.value}</div>
-                  <div className={`text-[11px] mt-0.5 ${mutedText}`}>{s.label}</div>
-                </div>
-              ))}
-            </div>
+        {/* Stats row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 text-center">
+            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+            <div className="text-xs text-gray-500">Total</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+            <div className="text-xs text-gray-500">Active</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 text-center">
+            <div className="text-2xl font-bold text-purple-600">{stats.leading}</div>
+            <div className="text-xs text-gray-500">Leading</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 text-center">
+            <div className="text-2xl font-bold text-gray-500">{stats.completed}</div>
+            <div className="text-xs text-gray-500">Completed</div>
           </div>
         </div>
-      </section>
 
-      {/* Controls */}
-      <div className={`sticky top-0 z-40 border-b ${divider} ${darkMode ? "bg-gray-900/90" : "bg-white/90"} backdrop-blur-md`}>
-        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          {/* Tabs */}
-          <div className={`flex items-center gap-0.5 p-1 rounded-xl ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}>
-            {tabs.map(t => (
-              <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all whitespace-nowrap ${activeTab === t.key ? `bg-gradient-to-r ${accentGradient} text-white shadow-sm` : `${darkMode ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700"}`}`}>
-                {t.label}
-                {t.count > 0 && (
-                  <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${activeTab === t.key ? "bg-white/25 text-white" : `${darkMode ? "bg-gray-700 text-gray-400" : "bg-gray-200 text-gray-500"}`}`}>{t.count}</span>
-                )}
+        {/* Controls bar */}
+        <div className="flex flex-wrap gap-3 items-center justify-between">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md ${activeTab === tab.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:bg-gray-200"}`}
+              >
+                {tab.label} {tab.count > 0 && `(${tab.count})`}
               </button>
             ))}
           </div>
-
-          {/* Search */}
-          <div className="relative flex-1 sm:max-w-sm">
-            <Search className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${mutedText}`} />
-            <input type="text" placeholder="Search projects, tech, roles…" value={search} onChange={e => setSearch(e.target.value)}
-              className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs outline-none transition-all focus:ring-2 focus:ring-violet-500/30 ${darkMode ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-200 text-gray-900 placeholder-gray-400"}`}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search projects, tech, roles..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm"
             />
-            {search && <button onClick={() => setSearch("")} className={`absolute right-3 top-1/2 -translate-y-1/2 ${mutedText} hover:text-red-400`}><X className="w-3.5 h-3.5" /></button>}
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-
-          {/* Status filter */}
-          <div className="relative">
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              className={`pl-3 pr-7 py-2.5 rounded-xl border text-xs font-medium outline-none appearance-none ${darkMode ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-white border-gray-200 text-gray-700"}`}>
-              {["All", "Open", "In Progress", "On Hold", "Completed", "Closed"].map(o => <option key={o}>{o}</option>)}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none text-gray-400" />
-          </div>
-
-          <button onClick={() => setShowCreate(true)}
-            className={`ml-auto flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r ${accentGradient} text-white shadow-md shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 transition-all whitespace-nowrap`}>
-            <Plus className="w-3.5 h-3.5" /> New Project
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+          >
+            {["All", "Open", "In Progress", "On Hold", "Completed", "Closed"].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm hover:bg-gray-800"
+          >
+            <Plus className="w-4 h-4" /> New Project
           </button>
         </div>
-      </div>
 
-      {/* Grid */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-5">
-          <p className={`text-sm ${mutedText}`}>
-            <span className={`font-semibold ${headingText}`}>{filtered.length}</span> project{filtered.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
+        {/* Project grid */}
         {filtered.length === 0 ? (
-          <div className={`rounded-2xl border p-16 text-center ${cardBg}`}>
-            <div className="text-5xl mb-4">🗂️</div>
-            <h3 className={`text-xl font-bold mb-2 ${headingText}`}>No projects found</h3>
-            <p className={`text-sm ${mutedText} mb-6 max-w-xs mx-auto`}>Try adjusting your filters or create your first project.</p>
-            <button onClick={() => setShowCreate(true)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r ${accentGradient} text-white hover:scale-105 transition-all`}>
-              Create a project →
-            </button>
+          <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-3">🗂️</div>
+            <h3 className="text-lg font-semibold text-gray-900">No projects found</h3>
+            <p className="text-sm text-gray-500 mt-1 mb-4">Try adjusting your filters or create your first project.</p>
+            <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">Create a project →</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filtered.map((p, i) => (
-              <ProjectCard key={p._id} p={p} darkMode={darkMode} idx={i}
-                onStar={() => setProjects(prev => prev.map(x => x._id === p._id ? { ...x, isStarred: !x.isStarred } : x))}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filtered.map(project => (
+              <ProjectCard key={project._id} project={project} onStar={() => setProjects(prev => prev.map(p => p._id === project._id ? { ...p, isStarred: !p.isStarred } : p))} />
             ))}
           </div>
         )}
-      </main>
+      </div>
 
-      {showCreate && (
-        <CreateModal darkMode={darkMode} onClose={() => setShowCreate(false)}
-          onCreate={p => { setProjects(prev => [p, ...prev]); }} />
-      )}
-
-      <style>{`
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-      `}</style>
+      {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreate={p => setProjects(prev => [p, ...prev])} />}
     </div>
   );
-};
-
-export default WorkspaceHubPage;
+}
