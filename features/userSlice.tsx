@@ -23,14 +23,17 @@ export const counterSlice = createSlice({
   reducers: {
     handleEmail : (state,action) => {
       state.email = action.payload
+      console.log(state.email);
+      
     },
      getUserData : (state,action) => {
       state.user = action.payload
     },
     handleUserData : (state, action) => {
       // console.log(action.payload.user);
-      
       state.userData = action.payload.user
+      console.log(state.userData?.email);
+      
       // console.log(state.userData);
       
     }

@@ -37,6 +37,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RootState } from "@/redux/store";
+import { IUser } from "@/models/user-model";
 
 interface Feature {
   title: string;
@@ -44,26 +46,17 @@ interface Feature {
   href: string;
 }
 
-interface Navbar5Props {
-  userId?: string | null;
-  user?: {
-    name: string;
-    email: string;
-    avatar: string;
-  };
-}
-
-export default function Navbar5({ userId, user }: Navbar5Props) {
+export default function Navbar5() {
   const darkMode = useAppSelector((state: any) => state.Theme.darkMode);
   const dispatch = useAppDispatch();
   const toggleDarkMode = () => dispatch(handleTheme());
 
-  const authUserId = useAppSelector((state: any) => state.User.userData);
-  const currentUserId = userId ?? authUserId ?? null;
+  const userData = useAppSelector<IUser>((state: any) => state.User.userData);
+  const currentUserId = userData ?? null;
 
-  const [isLoggedIn] = useState(true);
+  // const [isLoggedIn] = useState(userD);
 
-  const currentUser = user ?? {
+  const currentUser = userData ?? {
     name: "Navkirat Singh",
     email: "kirat@example.com",
     avatar: "https://github.com/shadcn.png",
@@ -199,13 +192,13 @@ export default function Navbar5({ userId, user }: Navbar5Props) {
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          {isLoggedIn ? (
+          {userData?.isVerified == true ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer border border-gray-200 dark:border-gray-700">
-                  <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+                  <AvatarImage src={""} alt={currentUser.username} />
                   <AvatarFallback className="bg-[#0EA472] text-white">
-                    {currentUser.name[0]}
+                    {currentUser.username[0]}
                   </AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
@@ -216,12 +209,12 @@ export default function Navbar5({ userId, user }: Navbar5Props) {
                     : "bg-white border-gray-200 text-[#0D1B2A]"
                 }`}
               >
-                <DropdownMenuLabel>{currentUser.name}</DropdownMenuLabel>
+                <DropdownMenuLabel>{currentUser.username}</DropdownMenuLabel>
                 <DropdownMenuSeparator
                   className={darkMode ? "bg-gray-800" : "bg-gray-200"}
                 />
                 <DropdownMenuItem asChild>
-                  <Link href={`/profile/${currentUserId ?? "me"}`}>Profile</Link>
+                  <Link href={`${userData._id}}`}>Profile</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings">Settings</Link>
@@ -373,20 +366,20 @@ export default function Navbar5({ userId, user }: Navbar5Props) {
               </div>
 
               <div className="mt-6 flex flex-col gap-2">
-                {isLoggedIn ? (
+                {userData?.isVerified == true ? (
                   <>
                     <div className="flex items-center gap-3 py-2">
                       <Avatar className="h-8 w-8 border border-gray-200 dark:border-gray-700">
-                        <AvatarImage src={currentUser.avatar} />
+                        <AvatarImage src={""} />
                         <AvatarFallback className="bg-[#0EA472] text-white text-xs">
-                          {currentUser.name[0]}
+                          {currentUser.username[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{currentUser.name}</span>
+                      <span className="text-sm font-medium">{currentUser.username}</span>
                     </div>
 
                     <Link
-                      href={`/profile/${currentUserId ?? "me"}`}
+                      href={`${userData._id}}`}
                       className={`block py-2 px-3 rounded-xl text-sm transition ${
                         darkMode
                           ? "text-gray-400 hover:text-white hover:bg-gray-800"

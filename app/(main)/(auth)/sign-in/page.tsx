@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,12 +23,26 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+  
     try {
-      // Uncomment when API ready: await loginUser(formData);
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
+      }); 
+      console.log(result);
+      
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+  
       toast.success("Welcome back! 🎉");
-      router.push("/dashboard");
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Login failed");
+  
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      toast.error("Login failed");
     } finally {
       setIsSubmitting(false);
     }

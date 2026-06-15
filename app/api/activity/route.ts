@@ -1,60 +1,134 @@
-// import { NextRequest, NextResponse } from "next/server";
-// import dbConnect from "@/lib/db";
-// import Activity from "@/models/activity";
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import User from "@/models/user-model";
+import Feed from "@/models/feed-model";
+import { NextRequest, NextResponse } from "next/server";
+import uploadToCloudinary from "@/lib/cloudinary";
 
-// export const POST = async (req: NextRequest) => {
-//   try {
-//     // await dbConnect();
+export async function GET() {
+  try {
+    await connectDb();
 
-//     const body = await req.json();
-//     const { description, tags, userId } = body;
+    const session = await auth();
 
-//     if (!description) {
-//       return NextResponse.json(
-//         { success: false, message: "Description required" },
-//         { status: 400 }
-//       );
-//     }
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-//     const activity = await Activity.create({
-//       description,
-//       tags,
-//       createdBy: userId,
-//     });
+    const user = await User.findOne({ email: session.user.email }).select("_id username email");
 
-//     return NextResponse.json({ success: true, data: activity });
-//   } catch (error: any) {
-//     return NextResponse.json(
-//       { success: false, message: error.message },
-//       { status: 500 }
-//     );
-//   }
-// };
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
 
-// export const GET = async (req: NextRequest) => {
-//   try {
-//     await dbConnect();
+    const activities = await Feed.find({ createdBy: user._id })
+      .populate("createdBy", "username")
+      .populate("comments.createdBy", "username")
+      .sort({ createdAt: -1 })
+      .lean();
 
-//     const { searchParams } = new URL(req.url);
+    return NextResponse.json(
+      {
+        success: true,
+        activities,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("GET /api/feed:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
 
-//     const page = Number(searchParams.get("page")) || 1;
-//     const limit = Number(searchParams.get("limit")) || 10;
+export async function POST(req: NextRequest) {
+  try {
+    await connectDb();
 
-//     const skip = (page - 1) * limit;
+    const session = await auth();
 
-//     const activities = await Activity.find()
-//       .populate("createdBy", "name username")
-//       .skip(skip)
-//       .limit(limit);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
 
-//     return NextResponse.json({
-//       success: true,
-//       data: activities,
-//     });
-//   } catch (error: any) {
-//     return NextResponse.json(
-//       { success: false, message: error.message },
-//       { status: 500 }
-//     );
-//   }
-// };
+    const user = await User.findOne({
+      email: session.user.email,
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    const formData = await req.formData();
+
+    const description = formData.get("description") as string;
+    const file = formData.get("file") as File | null;
+    const tags = formData.get("tags") as string;
+	console.log(description , file , tags);
+	
+	const tagsArray = tags
+	? tags.split(",").map(tag => tag.trim())
+	: [];
+    if (!description) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Description is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    let fileUrl = null;
+
+    if (file && file.size > 0) {
+      fileUrl = await uploadToCloudinary(file);
+    }
+
+    const activity = await Feed.create({
+      description,
+      file: fileUrl,
+      tags: tagsArray,
+      createdBy: user._id,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Activity posted successfully",
+        activity,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("CREATE ACTIVITY ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Something went wrong",
+      },
+      { status: 500 }
+    );
+  }
+}

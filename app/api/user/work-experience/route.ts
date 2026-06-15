@@ -1,24 +1,83 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
-import { getUserIdFromRequest } from '@/lib/auth';
-import User from '@/models/user-model';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
+    await connectDb();
 
-    const { companyName, duration, role, description, location } = await req.json();
-    const user = await User.findById(userId);
-    if (!user) return NextResponse.json({ msg: 'User not found' }, { status: 404 });
+    const session = await auth();
 
-    user.workExperience.push({ companyName, duration, role, description, location });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+    const {
+      companyName,
+      duration,
+      role,
+      description,
+      location,
+    } = await req.json();
+
+    if (!companyName || !duration) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Company name and duration are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findOne({
+      email: session.user.email,
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    user.workExperience.push({
+      companyName,
+      duration,
+      role,
+      description,
+      location,
+    });
+
     await user.save();
 
-    return NextResponse.json({ msg: 'Work experience added' });
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Work experience added successfully",
+        workExperience: user.workExperience,
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('addWorkExperience:', error);
-    return NextResponse.json({ msg: 'Failed to add work experience' }, { status: 500 });
+    console.error("ADD WORK EXPERIENCE ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
+      { status: 500 }
+    );
   }
 }

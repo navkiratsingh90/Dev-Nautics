@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
 import {
   Pencil, Globe, Linkedin, Github, Mail, Users, FolderOpen,
@@ -8,44 +9,10 @@ import {
   MessageCircle, Briefcase, GraduationCap, Code2, Trophy, Award,
   Layers, BookOpen, Hash, GitBranch,
 } from "lucide-react";
-import { ISkills, IUser } from "@/types/User";
+import { IUser, ISkills } from "@/types/User";
+import axios from "axios";
 
-// ─── Mock Data (unchanged) ─────────────────────────────────────
-const DUMMY_USER: IUser = {
-  _id: "dummy123", username: "Alex Johnson",
-  email: "alex.johnson@example.com", password: "",
-  about: "Passionate frontend developer with 5+ years of experience building responsive web applications. Love working with React and modern JavaScript. Currently exploring AI-powered tooling and edge computing.",
-  title: "Senior Frontend Developer",
-  portfolio: "alexjohnson.dev",
-  connectedUsers: [{ _id: "c1" }, { _id: "c2" }, { _id: "c3" }, { _id: "c4" }, { _id: "c5" }],
-  totalPendingRequests: [], totalPoints: 1250,
-  challengesAttended: ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6"],
-  createdAt: new Date("2024-01-10"), updatedAt: new Date("2025-04-01"),
-  socialLinks: ["https://linkedin.com/in/alexjohnson", "https://github.com/alexjohnson"],
-  skills: {
-    frontend: ["React", "Next.js", "TypeScript", "Tailwind CSS", "Framer Motion"],
-    backend: ["Node.js", "Express", "GraphQL", "REST API"],
-    frameworks: ["Next.js", "Redux", "React Query", "Prisma"],
-    libraries: ["Recharts", "Zod", "date-fns", "Lucide"],
-    tools: ["Git", "Docker", "Figma", "VS Code", "Postman"],
-    languages: ["TypeScript", "JavaScript", "Python", "SQL"],
-  },
-  education: [
-    { schoolName: "UC Berkeley", degree: "B.S. Computer Science", duration: "2015 – 2019", description: "Specialized in HCI and distributed systems. Dean's List all 4 years." },
-    { schoolName: "Meta / Coursera", degree: "Front-End Developer Professional Certificate", duration: "2021", description: "Advanced React patterns, performance optimization, and accessibility." },
-  ],
-  workExperience: [
-    { companyName: "Stripe", role: "Senior Frontend Engineer", duration: "2022 – Present", location: "San Francisco, CA", description: "Building the dashboard UI. Led a team of 4 to redesign the billing portal, reducing drop-off by 22%." },
-    { companyName: "Airbnb", role: "Frontend Engineer", duration: "2020 – 2022", location: "Remote", description: "Worked on the listing creation flow and host dashboard. Contributed to a design system used by 300+ engineers." },
-    { companyName: "Freelance", role: "React Developer", duration: "2019 – 2020", location: "Remote", description: "Shipped 8+ client projects — storefronts, SaaS dashboards, and marketing sites." },
-  ],
-  projects: [
-    { title: "AI Code Assistant", description: "Intelligent code completion using fine-tuned LLMs.", techStack: ["Python", "TypeScript", "FastAPI", "React"], role: "Project Lead", duration: "Jan 2025 – Present", githubLink: "https://github.com/alexj/ai-code-assistant", liveLink: "https://ai-code.alexjohnson.dev", file: "" },
-    { title: "react-hot-key", description: "Open-source keyboard shortcut library for React.", techStack: ["TypeScript", "React", "Rollup", "Jest"], role: "Author", duration: "Nov 2024", githubLink: "https://github.com/alexj/react-hot-key" },
-    { title: "DevConnect Clone", description: "Full-stack developer community platform.", techStack: ["Next.js", "MongoDB", "Socket.io", "Tailwind"], role: "Full-Stack Dev", duration: "2024", githubLink: "https://github.com/alexj/devconnect" },
-  ],
-};
-
+// ─── Skill categories configuration ──────────────────────────────────────────
 const SKILL_CATEGORIES: { key: keyof ISkills; label: string; icon: React.ReactNode }[] = [
   { key: "frontend", label: "Frontend", icon: <Code2 className="w-3.5 h-3.5" /> },
   { key: "backend", label: "Backend", icon: <Layers className="w-3.5 h-3.5" /> },
@@ -55,15 +22,31 @@ const SKILL_CATEGORIES: { key: keyof ISkills; label: string; icon: React.ReactNo
   { key: "languages", label: "Languages", icon: <Code2 className="w-3.5 h-3.5" /> },
 ];
 
-// ─── Edit Modal (simplified) ─────────────────────────────────
+// ─── Edit Modal ──────────────────────────────────────────────────────────────
 function EditModal({ user, onClose }: { user: IUser; onClose: () => void }) {
   const [form, setForm] = useState({
     username: user.username,
-    title: user.title ?? "",
+    position: user.position ?? "",
     about: user.about ?? "",
     portfolio: user.portfolio ?? "",
   });
-
+const handleSave = async () => {
+  try {
+    const response = await axios.put(
+      "/api/user/profile",
+      form
+    );
+    console.log(response);
+    
+    toast.success(response.data.message);
+    onClose()
+  } catch (error: any) {
+    toast.error(
+      error.response?.data?.message ||
+      "Failed to update profile"
+    );
+  }
+};
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
@@ -86,11 +69,11 @@ function EditModal({ user, onClose }: { user: IUser; onClose: () => void }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Title</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">position</label>
             <input
               className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-green-500"
-              value={form.title}
-              onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
+              value={form.position}
+              onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))}
             />
           </div>
           <div>
@@ -115,7 +98,7 @@ function EditModal({ user, onClose }: { user: IUser; onClose: () => void }) {
         <div className="flex gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
           <button onClick={onClose} className="flex-1 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-white">Cancel</button>
           <button
-            onClick={() => { toast.success("Profile updated!"); onClose(); }}
+            onClick={handleSave}
             className="flex-1 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800"
           >
             Save changes
@@ -126,16 +109,25 @@ function EditModal({ user, onClose }: { user: IUser; onClose: () => void }) {
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────
+// ─── Main Component ──────────────────────────────────────────────────────────
 export default function UserProfilePage() {
-  const [user] = useState<IUser>(DUMMY_USER);
+  const user = useAppSelector<IUser | null>((state: any) => state.User.userData);
   const [showEdit, setShowEdit] = useState(false);
   const [isConn, setIsConn] = useState(false);
   const [connected, setConn] = useState(false);
   const [reqSent, setReq] = useState(false);
   const [emailCopied, setEC] = useState(false);
 
-  const isOwn = true;
+  // If user data is not yet loaded, show a simple loading state
+  if (!user) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading profile...</div>
+      </div>
+    );
+  }
+
+  const isOwn = true; // In a real app, compare user._id with current user's id from auth
 
   const onConnect = async () => {
     setIsConn(true);
@@ -152,13 +144,15 @@ export default function UserProfilePage() {
     toast("Email copied!");
   };
 
+  // Helper to safely get array values (works with both arrays and undefined)
+  const safeArray = (arr: any[] | undefined) => arr ?? [];
+
   return (
     <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto space-y-6">
 
         {/* Hero Card */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-          {/* Cover */}
           <div className="h-32 md:h-40 bg-green-600" />
 
           <div className="px-6 pb-6">
@@ -200,14 +194,16 @@ export default function UserProfilePage() {
 
             <div className="mt-4">
               <h1 className="text-2xl font-bold text-gray-900">{user.username}</h1>
-              {user.title && <p className="text-sm font-medium text-green-600 mt-0.5">{user.title}</p>}
+              {user.position && <p className="text-sm font-medium text-green-600 mt-0.5">{user.position}</p>}
               <div className="flex flex-wrap gap-3 mt-2 text-xs">
                 {user.portfolio && (
                   <a href={`https://${user.portfolio}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-green-600 hover:underline">
                     <Globe className="w-3.5 h-3.5" /> {user.portfolio} <ExternalLink className="w-2.5 h-2.5 opacity-50" />
                   </a>
                 )}
-                <span className="text-gray-500">Joined {new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                <span className="text-gray-500">
+                  Joined {new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                </span>
               </div>
             </div>
 
@@ -215,13 +211,13 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-        {/* Stats Row */}
+        {/* Stats Row (using real data) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { icon: <Users className="w-4 h-4" />, value: user.connectedUsers?.length ?? 0, label: "Connections", color: "bg-green-500" },
-            { icon: <FolderOpen className="w-4 h-4" />, value: user.projects.length, label: "Projects", color: "bg-blue-500" },
-            { icon: <Trophy className="w-4 h-4" />, value: user.totalPoints, label: "Points", color: "bg-amber-500" },
-            { icon: <Award className="w-4 h-4" />, value: user.challengesAttended.length, label: "Challenges", color: "bg-fuchsia-500" },
+            { icon: <Users className="w-4 h-4" />, value: safeArray(user.connectedUsers).length, label: "Connections", color: "bg-green-500" },
+            { icon: <FolderOpen className="w-4 h-4" />, value: safeArray(user.projects).length, label: "Projects", color: "bg-blue-500" },
+            { icon: <Trophy className="w-4 h-4" />, value: user.totalPoints ?? 0, label: "Points", color: "bg-amber-500" },
+            { icon: <Award className="w-4 h-4" />, value: safeArray(user.challengesAttended).length, label: "Challenges", color: "bg-fuchsia-500" },
           ].map((stat, idx) => (
             <div key={idx} className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col items-center gap-2 text-center">
               <div className={`w-10 h-10 rounded-xl ${stat.color} flex items-center justify-center text-white`}>{stat.icon}</div>
@@ -248,7 +244,7 @@ export default function UserProfilePage() {
                   {emailCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
                 </button>
               </div>
-              {user.socialLinks?.map((link, i) => (
+              {safeArray(user.socialLinks).map((link, i) => (
                 <a key={i} href={link} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-green-600 hover:underline truncate">
                   {link.includes("linkedin") ? <Linkedin className="w-4 h-4" /> : <Github className="w-4 h-4" />}
                   {link.replace(/^https?:\/\//, "").split("/")[0]}
@@ -257,8 +253,6 @@ export default function UserProfilePage() {
             </div>
           </div>
         </div>
-
-        
       </div>
 
       {showEdit && <EditModal user={user} onClose={() => setShowEdit(false)} />}

@@ -6,10 +6,12 @@ import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAppDispatch } from "@/redux/hooks";
+import { handleEmail } from "@/features/userSlice";
 
 export default function SignupPage() {
   const router = useRouter();
-
+  const dispatch = useAppDispatch()
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -37,7 +39,7 @@ export default function SignupPage() {
         email: formData.email,
         password: formData.password,
       });
-
+      dispatch(handleEmail(formData.email))
       toast.success(data.message || "OTP sent to your email");
 
       router.push(`/otp`);

@@ -15,6 +15,7 @@ const UseGetMe = (enabled : boolean) => {
 		console.log(data);
 		
 		dispatch(handleUserData(data))
+		
 		}
 		getMe()
 	}, [enabled])

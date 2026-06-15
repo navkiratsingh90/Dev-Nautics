@@ -8,10 +8,12 @@ import { useAppSelector } from "@/redux/hooks";
 import { RootState } from "@/redux/store";
 import { Card, CardContent } from "@/components/ui/card";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 
 const OTP_LENGTH = 6;
 
 export default function OtpPage() {
+  const router = useRouter()
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [error, setError] = useState<string>("");
   const [resendTimer, setResendTimer] = useState<number>(0);
@@ -79,9 +81,7 @@ export default function OtpPage() {
   
 	  alert(data.message);
   
-	  if (data.success) {
-		window.location.href = "/login";
-	  }
+  router.push('/sign-in')
 	} catch (error: any) {
 	  setError(
 		error?.response?.data?.message ||

@@ -1,25 +1,22 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
 import { GraduationCap, Calendar, Plus, X } from "lucide-react";
+import axios from "axios";
 
-// Types
+// Types (match the schema)
 interface Education {
-  id: number;
+  id?: number;          // optional, for local UI
   schoolName: string;
   degree: string;
   duration: string;
   description: string;
 }
 
-interface User {
-  _id: string;
-  username: string;
-  education: Education[];
-}
-
 export default function EducationPage() {
+  const user = useAppSelector((state: any) => state.User.userData);
   const [educations, setEducations] = useState<Education[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,37 +25,63 @@ export default function EducationPage() {
     duration: "",
     description: "",
   });
+const handleSubmit = async (
+  e: React.FormEvent<HTMLFormElement>
+) => {
+  e.preventDefault();
 
-  // Dummy data (replace with API call)
+  try {
+    const response = await axios.post(
+      "/api/user/education",
+      {
+        schoolName: formData.schoolName,
+        degree: formData.degree,
+        duration: formData.duration,
+        description: formData.description,
+      }
+    );
+    console.log(response.data);
+    
+    toast.success(response.data.message);
+
+    setFormData({
+      schoolName: "",
+      degree: "",
+      duration: "",
+      description: "",
+    });
+
+    setShowForm(false);
+
+    // Optional: refresh education list
+    // fetchUser();
+  } catch (error: any) {
+    toast.error(
+      error.response?.data?.message ||
+        "Failed to add education"
+    );
+  }
+};
+  // Initialize education list from Redux user data
   useEffect(() => {
-    const dummyEducations: Education[] = [
-      {
-        id: 1,
-        schoolName: "Guru Nanak Dev University",
-        degree: "B.Tech in Computer Science",
-        duration: "2023 - 2027",
-        description:
-          "Currently pursuing Bachelor's degree. Active in coding, hackathons, and web development projects. CGPA: 9.2/10",
-      },
-      {
-        id: 2,
-        schoolName: "Spring Dale Senior School",
-        degree: "Class 12 (Non-Medical)",
-        duration: "2021 - 2023",
-        description:
-          "Studied Physics, Chemistry, and Mathematics. Scored 90% and participated in science exhibitions.",
-      },
-      {
-        id: 3,
-        schoolName: "Spring Dale Senior School",
-        degree: "Class 10",
-        duration: "2019 - 2021",
-        description:
-          "Completed secondary education with strong academic performance and participation in extracurricular activities.",
-      },
-    ];
-    setEducations(dummyEducations);
-  }, []);
+    if (user?.education) {
+      // Add a local id for each entry (for React keys)
+      const eduWithIds = user.education.map((edu: Education, idx: number) => ({
+        ...edu,
+        id: idx + 1,
+      }));
+      setEducations(eduWithIds);
+    }
+  }, [user]);
+
+  // Show loading while user data is not yet loaded
+  if (!user) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading profile...</div>
+      </div>
+    );
+  }
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -67,25 +90,9 @@ export default function EducationPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newEducation: Education = {
-      id: educations.length + 1,
-      schoolName: formData.schoolName,
-      degree: formData.degree,
-      duration: formData.duration,
-      description: formData.description,
-    };
-    setEducations([...educations, newEducation]);
-    setFormData({
-      schoolName: "",
-      degree: "",
-      duration: "",
-      description: "",
-    });
-    setShowForm(false);
-    toast.success("Education added successfully!");
-  };
+
+  // Helper: safe array for timeline dot colors
+  const dotColors = ["bg-purple-500", "bg-cyan-500", "bg-pink-500"];
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6">
@@ -108,12 +115,9 @@ export default function EducationPage() {
           {/* Education items */}
           <div className="space-y-8">
             {educations.map((edu, idx) => {
-              // Simple dot colors (no gradient)
-              const dotColors = ["bg-purple-500", "bg-cyan-500", "bg-pink-500"];
               const color = dotColors[idx % dotColors.length];
-
               return (
-                <div key={edu.id} className="flex gap-4">
+                <div key={edu.id ?? idx} className="flex gap-4">
                   {/* Timeline dot */}
                   <div className="relative z-10">
                     <div
@@ -176,7 +180,7 @@ export default function EducationPage() {
         </div>
       </div>
 
-      {/* Add Education Modal (simplified) */}
+      {/* Add Education Modal */}
       {showForm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"

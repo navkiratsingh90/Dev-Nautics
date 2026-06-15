@@ -405,276 +405,197 @@
 // };
 
 // export default ActivityCard;
-"use client";
+import React from "react";
+import { Bookmark, Heart, MessageCircle, MoreHorizontal, Trash2, Tag } from "lucide-react";
 
-import React, { useState, useRef } from "react";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { toast } from "sonner";
-import {
-  Heart, MessageCircle, Bookmark, MoreHorizontal,
-  Send, Trash2, X, ChevronDown,
-} from "lucide-react";
-
-// Types
-export interface CommentUser { _id: string; username: string; avatar?: string; }
-export interface Comment    { _id: string; content: string; createdBy: CommentUser; createdAt: string; }
-export interface LikeUser   { _id: string; username: string; avatar?: string; }
-export interface Activity {
-  _id: string; description: string; file?: string;
-  likes: LikeUser[]; comments: Comment[];
-  createdBy: CommentUser; createdAt: string; isBookmarked: boolean;
+interface ActivityComment {
+  _id?: string;
+  content: string;
+  createdBy: {
+    _id: string;
+    username: string;
+  };
+  createdAt: string;
 }
 
-interface Props {
-  post: Activity; darkMode: boolean; currentUserId: string;
-  onDelete?: (id: string) => void;
-  onLike?:   (id: string) => void;
-  onBookmark?(id: string): void;
-  onComment?: (postId: string, text: string) => void;
-  index?: number;
+interface Activity {
+  _id: string;
+  description: string;
+  file?: string;
+  tags: string[];
+  likes: number;
+  comments: ActivityComment[];
+  createdBy: {
+    _id: string;
+    username: string;
+  };
+  createdAt: string;
+  isBookmarked?: boolean;
 }
 
-const avatarGradients = [
-  "from-violet-500 to-fuchsia-500", "from-cyan-500 to-blue-500",
-  "from-fuchsia-500 to-pink-500",   "from-amber-500 to-orange-500",
-  "from-green-500 to-emerald-500",  "from-blue-500 to-violet-500",
-  "from-rose-500 to-fuchsia-500",   "from-teal-500 to-cyan-500",
-];
-function hashIndex(s: string) { return s.split("").reduce((a, c) => a + c.charCodeAt(0), 0); }
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
 
-export const ActivityCard: React.FC<Props> = ({
-  post, darkMode, currentUserId, onDelete, onLike, onBookmark, onComment, index = 0,
-}) => {
-  const [showComments, setShowComments]   = useState(false);
-  const [commentText, setCommentText]     = useState("");
-  const [localComments, setLocalComments] = useState<Comment[]>(post.comments);
-  const [isLiked, setIsLiked]             = useState(post.likes.some(u => u._id === currentUserId));
-  const [likeCount, setLikeCount]         = useState(post.likes.length);
-  const [bookmarked, setBookmarked]       = useState(post.isBookmarked);
-  const [menuOpen, setMenuOpen]           = useState(false);
-  const [likeAnim, setLikeAnim]           = useState(false);
-  const [imgExpanded, setImgExpanded]     = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const isOwnPost = post.createdBy._id === currentUserId;
-  const avatarIdx = hashIndex(post.createdBy._id) % avatarGradients.length;
-  const accentGradient = "from-violet-500 via-fuchsia-500 to-cyan-400";
-
-  // ── Theme tokens ──────────────────────────────────────────────────────────
-  const cardBg      = darkMode ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-200";
-  const mutedText   = darkMode ? "text-gray-400"  : "text-gray-500";
-  const headingText = darkMode ? "text-white"     : "text-gray-900";
-  const divider     = darkMode ? "border-gray-700/60" : "border-gray-100";
-  const inputCls    = `w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-all focus:ring-2 focus:ring-violet-500/30 resize-none ${darkMode ? "bg-gray-700/60 border-gray-600 text-white placeholder-gray-500 focus:border-violet-500/60" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-violet-400"}`;
-
-  function handleLike() {
-    setIsLiked(p => !p);
-    setLikeCount(p => isLiked ? p - 1 : p + 1);
-    setLikeAnim(true);
-    setTimeout(() => setLikeAnim(false), 400);
-    onLike?.(post._id);
-  }
-
-  function handleBookmark() {
-    setBookmarked(p => !p);
-    onBookmark?.(post._id);
-    toast(bookmarked ? "Removed from bookmarks" : "Saved to bookmarks");
-  }
-
-  function handleDelete() {
-    setMenuOpen(false);
-    onDelete?.(post._id);
-    toast.success("Post deleted");
-  }
-
-  function submitComment() {
-    if (!commentText.trim()) return;
-    const newComment: Comment = {
-      _id: Math.random().toString(36).slice(2),
-      content: commentText.trim(),
-      createdBy: { _id: currentUserId, username: "you" },
-      createdAt: new Date().toISOString(),
-    };
-    setLocalComments(p => [...p, newComment]);
-    onComment?.(post._id, commentText.trim());
-    setCommentText("");
-    toast.success("Comment added");
-  }
+export default function ActivityCard({
+  activity,
+  currentUserId,
+  onLike,
+  onComment,
+  onBookmark,
+  onDelete,
+}: {
+  activity: Activity;
+  currentUserId: string;
+  onLike: (id: string) => void;
+  onComment: (id: string) => void;
+  onBookmark: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const isOwnPost = activity.createdBy._id === currentUserId;
+  const isBookmarked = !!activity.isBookmarked;
 
   return (
-    <>
-      <article className={`group relative rounded-2xl border overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ${cardBg} ${darkMode ? "hover:border-violet-500/30 hover:shadow-violet-500/5" : "hover:border-violet-200 hover:shadow-violet-100/60"}`}>
-        {/* Gradient accent bar */}
-        <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accentGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+    <div className="bg-white border border-[#E8EDF2] rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-[#EDF7F3] border border-[#A7F3D0] flex items-center justify-center text-[#0EA472] font-bold shrink-0">
+              {activity.createdBy.username.slice(0, 2).toUpperCase()}
+            </div>
 
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between px-5 pt-5 pb-3">
-          <div className="flex items-center gap-3">
-            <Link href={`/user/${post.createdBy._id}`}>
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${avatarGradients[avatarIdx]} flex items-center justify-center text-sm font-bold text-white cursor-pointer hover:scale-105 transition-transform`}>
-                {post.createdBy.username.slice(0, 2).toUpperCase()}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="m-0 text-sm font-semibold text-[#0D1B2A]">
+                  {activity.createdBy.username}
+                </p>
+                <span className="text-[11px] text-[#94A3B8]">
+                  {timeAgo(activity.createdAt)}
+                </span>
               </div>
-            </Link>
-            <div>
-              <Link href={`/user/${post.createdBy._id}`}>
-                <span className={`text-sm font-bold ${headingText} hover:underline cursor-pointer`}>{post.createdBy.username}</span>
-              </Link>
-              <p className={`text-[11px] mt-0.5 ${mutedText}`}>
-                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+              <p className="m-0 text-[12px] text-[#64748B]">
+                Shared an activity
               </p>
             </div>
           </div>
 
-          {/* Menu */}
-          <div className="relative" ref={menuRef}>
-            <button onClick={() => setMenuOpen(p => !p)}
-              className={`p-1.5 rounded-lg transition-all ${darkMode ? "text-gray-500 hover:bg-gray-700 hover:text-gray-300" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onBookmark(activity._id)}
+              className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition ${
+                isBookmarked
+                  ? "bg-[#EDF7F3] border-[#A7F3D0] text-[#0EA472]"
+                  : "bg-white border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB]"
+              }`}
+              aria-label="Bookmark post"
+            >
+              <Bookmark className="w-4 h-4" fill={isBookmarked ? "currentColor" : "none"} />
+            </button>
+
+            {isOwnPost && (
+              <button
+                onClick={() => onDelete(activity._id)}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-[#E8EDF2] text-[#64748B] hover:text-red-500 hover:bg-red-50 transition"
+                aria-label="Delete post"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+
+            <button className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB] transition">
               <MoreHorizontal className="w-4 h-4" />
             </button>
-            {menuOpen && (
-              <div className={`absolute right-0 top-8 z-20 w-44 rounded-xl border shadow-xl overflow-hidden ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
-                style={{ animation: "scaleIn 0.15s ease both" }}>
-                {isOwnPost && (
-                  <button onClick={handleDelete}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" /> Delete post
-                  </button>
-                )}
-                <button onClick={() => { navigator.clipboard.writeText(window.location.href + `/post/${post._id}`); toast("Link copied!"); setMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors ${darkMode ? "text-gray-400 hover:bg-gray-800" : "text-gray-600 hover:bg-gray-50"}`}>
-                  Copy link
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* ── Body ── */}
-        <div className="px-5 pb-3">
-          <p className={`text-sm leading-relaxed ${darkMode ? "text-gray-300" : "text-gray-700"}`}>{post.description}</p>
-        </div>
+        <p className="mt-4 text-[13.5px] text-[#64748B] leading-relaxed whitespace-pre-wrap">
+          {activity.description}
+        </p>
 
-        {/* ── Image ── */}
-        {post.file && (
-          <div className="px-5 pb-4">
-            <div className="rounded-xl overflow-hidden cursor-zoom-in border relative" style={{ maxHeight: 320 }}
-              onClick={() => setImgExpanded(true)}>
-              <img src={post.file} alt="Post media"
-                className="w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
-                style={{ maxHeight: 320, objectFit: "cover" }} />
-            </div>
+        {activity.file && (
+          <div className="mt-4">
+            <img
+              src={activity.file}
+              alt="activity"
+              className="w-full max-h-96 object-cover rounded-xl border border-[#E8EDF2]"
+            />
           </div>
         )}
 
-        {/* ── Divider ── */}
-        <div className={`mx-5 h-px ${darkMode ? "bg-gray-700/50" : "bg-gray-100"}`} />
-
-        {/* ── Actions ── */}
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-1">
-            {/* Like */}
-            <button onClick={handleLike}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all hover:scale-105 active:scale-95 ${
-                isLiked
-                  ? "bg-rose-500/15 text-rose-400"
-                  : darkMode ? "text-gray-400 hover:bg-gray-700 hover:text-rose-400" : "text-gray-500 hover:bg-gray-50 hover:text-rose-500"
-              }`}>
-              <Heart className={`w-4 h-4 transition-all duration-300 ${isLiked ? "fill-rose-400 scale-110" : ""} ${likeAnim ? "scale-125" : ""}`} />
-              <span>{likeCount}</span>
-            </button>
-
-            {/* Comment */}
-            <button onClick={() => setShowComments(p => !p)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all hover:scale-105 ${
-                showComments
-                  ? "bg-violet-500/15 text-violet-400"
-                  : darkMode ? "text-gray-400 hover:bg-gray-700 hover:text-violet-400" : "text-gray-500 hover:bg-gray-50 hover:text-violet-500"
-              }`}>
-              <MessageCircle className="w-4 h-4" />
-              <span>{localComments.length}</span>
-            </button>
-          </div>
-
-          {/* Bookmark */}
-          <button onClick={handleBookmark}
-            className={`p-1.5 rounded-xl transition-all hover:scale-105 active:scale-95 ${
-              bookmarked
-                ? "text-amber-400 bg-amber-500/15"
-                : darkMode ? "text-gray-500 hover:bg-gray-700 hover:text-amber-400" : "text-gray-400 hover:bg-gray-50 hover:text-amber-500"
-            }`}>
-            <Bookmark className={`w-4 h-4 ${bookmarked ? "fill-amber-400" : ""}`} />
-          </button>
-        </div>
-
-        {/* ── Comment section ── */}
-        {showComments && (
-          <div className={`border-t ${divider} px-5 py-4 space-y-4`}>
-            {/* Existing comments */}
-            {localComments.length === 0 ? (
-              <p className={`text-xs text-center py-2 ${mutedText}`}>No comments yet. Be the first!</p>
-            ) : (
-              <div className="space-y-3">
-                {localComments.map((c, i) => {
-                  const cidx = hashIndex(c.createdBy._id) % avatarGradients.length;
-                  return (
-                    <div key={c._id} className="flex gap-3">
-                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarGradients[cidx]} flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5`}>
-                        {c.createdBy.username.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className={`flex-1 px-3 py-2.5 rounded-xl text-xs ${darkMode ? "bg-gray-700/50" : "bg-gray-50"}`}>
-                        <span className={`font-semibold mr-1.5 ${headingText}`}>{c.createdBy.username}</span>
-                        <span className={darkMode ? "text-gray-300" : "text-gray-700"}>{c.content}</span>
-                        <p className={`text-[10px] mt-1.5 ${mutedText}`}>
-                          {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Add comment */}
-            <div className="flex gap-2.5">
-              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${avatarGradients[0]} flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-1`}>
-                ME
-              </div>
-              <div className="flex-1 flex gap-2">
-                <textarea rows={1} value={commentText} onChange={e => setCommentText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
-                  placeholder="Write a comment…"
-                  className={`${inputCls} min-h-[38px] py-2`} />
-                <button onClick={submitComment} disabled={!commentText.trim()}
-                  className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 self-start mt-0 ${
-                    commentText.trim()
-                      ? `bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:scale-105 shadow-sm shadow-violet-500/20`
-                      : `${darkMode ? "bg-gray-700 text-gray-500" : "bg-gray-100 text-gray-400"} cursor-not-allowed`
-                  }`}>
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
+        {activity.tags?.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {activity.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F8FAFB] border border-[#E8EDF2] text-[11px] text-[#64748B]"
+              >
+                <Tag className="w-3 h-3 text-[#0EA472]" />
+                {tag}
+              </span>
+            ))}
           </div>
         )}
-      </article>
 
-      {/* ── Image lightbox ── */}
-      {imgExpanded && post.file && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
-          onClick={() => setImgExpanded(false)}>
-          <button className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-          <img src={post.file} alt="Expanded" className="max-w-full max-h-[90vh] rounded-2xl object-contain shadow-2xl"
-            onClick={e => e.stopPropagation()} />
+        <div className="mt-5 pt-4 border-t border-[#E8EDF2] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-4 text-xs text-[#64748B]">
+            <span>{activity.likes} likes</span>
+            <span>{activity.comments?.length || 0} comments</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onLike(activity._id)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
+            >
+              <Heart className="w-4 h-4 text-[#0EA472]" />
+              Like
+            </button>
+
+            <button
+              onClick={() => onComment(activity._id)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
+            >
+              <MessageCircle className="w-4 h-4 text-[#0EA472]" />
+              Comment
+            </button>
+          </div>
         </div>
-      )}
 
-      <style>{`
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-      `}</style>
-    </>
+        {activity.comments?.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {activity.comments.slice(0, 2).map((comment, idx) => (
+              <div
+                key={comment._id || idx}
+                className="bg-[#F8FAFB] border border-[#E8EDF2] rounded-xl px-3 py-2"
+              >
+                <p className="m-0 text-[12px] leading-relaxed text-[#64748B]">
+                  <span className="font-semibold text-[#0D1B2A]">
+                    {comment.createdBy.username}
+                  </span>{" "}
+                  {comment.content}
+                </p>
+              </div>
+            ))}
+
+            {activity.comments.length > 2 && (
+              <button
+                onClick={() => onComment(activity._id)}
+                className="text-[12px] font-medium text-[#0EA472] hover:underline"
+              >
+                View all {activity.comments.length} comments
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
-};
+}

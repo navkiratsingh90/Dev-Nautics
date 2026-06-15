@@ -1,48 +1,57 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
-import { getUserIdFromRequest } from '@/lib/auth';
-import User from '@/models/user-model';
-import Activity from '@/models/activity-model';
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    await dbConnect();
-    const userId = params.id; // For viewing another user's profile
-    const user = await User.findById(userId).populate('connectedUsers', 'username email');
-    const activities = await Activity.countDocuments({ createdBy: userId });
-
-    if (!user) {
-      return NextResponse.json({ msg: 'User not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ user, totalActivities: activities });
-  } catch (error) {
-    console.error('getUserProfile:', error);
-    return NextResponse.json({ msg: 'Failed to fetch profile' }, { status: 500 });
-  }
-}
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import User from "@/models/user-model";
 
 export async function PUT(req: NextRequest) {
   try {
-    await dbConnect();
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) {
-      return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
+    await connectDb();
+
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
     }
 
-    const { about } = await req.json();
-    const user = await User.findByIdAndUpdate(userId, { about }, { new: true });
+    const { username, position, about, portfolio } = await req.json();
 
-    if (!user) {
-      return NextResponse.json({ msg: 'User not found' }, { status: 404 });
-    }
+    const updatedUser = await User.findOneAndUpdate(
+      { email: session.user.email },
+      {
+        username,
+        position,
+        about,
+        portfolio,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).select("-password");
 
-    return NextResponse.json({ msg: 'Profile updated', user });
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Profile updated successfully",
+        user: updatedUser,
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('updateUserProfile:', error);
-    return NextResponse.json({ msg: 'Failed to update profile' }, { status: 500 });
+    console.error("UPDATE PROFILE ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
+      { status: 500 }
+    );
   }
 }

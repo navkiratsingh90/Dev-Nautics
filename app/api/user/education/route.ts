@@ -1,24 +1,81 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
-import { getUserIdFromRequest } from '@/lib/auth';
-import User from '@/models/user-model';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
+    await connectDb();
 
-    const { schoolName, degree, duration, description } = await req.json();
-    const user = await User.findById(userId);
-    if (!user) return NextResponse.json({ msg: 'User not found' }, { status: 404 });
+    const session = await auth();
 
-    user.education.push({ schoolName, degree, duration, description });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+    const {
+      schoolName,
+      degree,
+      duration,
+      description,
+    } = await req.json();
+
+    if (!schoolName || !degree || !duration) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "All required fields must be provided",
+        },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findOne({
+      email: session.user.email,
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    user.education.push({
+      schoolName,
+      degree,
+      duration,
+      description,
+    });
+
     await user.save();
 
-    return NextResponse.json({ msg: 'Education added', education: user.education });
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Education added successfully",
+        education: user.education,
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('addEducation:', error);
-    return NextResponse.json({ msg: 'Failed to add education' }, { status: 500 });
+    console.error("ADD EDUCATION ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
+      { status: 500 }
+    );
   }
 }

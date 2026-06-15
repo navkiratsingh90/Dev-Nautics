@@ -44,22 +44,22 @@ export interface IUser extends Document {
   email: string;
   password: string;
 
-  about: string;
-
+  about?: string;
+  position : string,
+  portfolio : string,
   verificationCode?: string;
   verificationExpiry?: Date;
 
-  education: IEducation[];
-  workExperience: IWorkExperience[];
+  education?: IEducation[];
+  workExperience?: IWorkExperience[];
 
-  skills: ISkills;
+  skills?: ISkills;
 
-  projects: IProject[];
+  projects?: IProject[];
 
-  totalPendingRequests: Types.ObjectId[];
-  connectedUsers: Types.ObjectId[];
-
-  totalPoints: number;
+  totalPendingRequests?: Types.ObjectId[];
+  connectedUsers?: Types.ObjectId[];
+  totalPoints?: number;
 
   isVerified: boolean;
 
@@ -120,7 +120,14 @@ const userSchema = new Schema<IUser>(
       type: String,
       default: "",
     },
-
+    position : {
+      type : String,
+      default : ""
+    },
+    portfolio : {
+      type : String,
+      default : ""
+    },
     verificationCode: {
       type: String,
     },
