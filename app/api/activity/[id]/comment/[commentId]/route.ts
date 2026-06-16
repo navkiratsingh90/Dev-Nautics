@@ -4,9 +4,16 @@ import Feed from "@/models/feed-model";
 import User from "@/models/user-model";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(
+interface Params {
+  params: Promise<{
+    id: string;
+    commentId: string;
+  }>;
+}
+
+export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: Params
 ) {
   try {
     await connectDb();
@@ -20,20 +27,6 @@ export async function POST(
           message: "Unauthorized",
         },
         { status: 401 }
-      );
-    }
-
-    const { id } = await params;
-
-    const { content } = await req.json();
-
-    if (!content?.trim()) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Comment is required",
-        },
-        { status: 400 }
       );
     }
 
@@ -51,6 +44,8 @@ export async function POST(
       );
     }
 
+    const { id, commentId } = await params;
+
     const activity = await Feed.findById(id);
 
     if (!activity) {
@@ -63,27 +58,42 @@ export async function POST(
       );
     }
 
-    activity.comments.push({
-      createdBy: user._id,
-      content,
-    });
+    const comment = activity.comments.id(id);
+
+    if (!comment) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Comment not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Only comment owner can delete
+    if (comment.createdBy.toString() !== user._id.toString()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You can only delete your own comments",
+        },
+        { status: 403 }
+      );
+    }
+
+    activity.comments.pull(commentId);
 
     await activity.save();
-
-    const updatedActivity = await Feed.findById(id)
-      .populate("comments.createdBy", "username _id");
 
     return NextResponse.json(
       {
         success: true,
-        message: "Comment added successfully",
-        activity: updatedActivity,
-		comment : activity.comments[activity.comments.length - 1]
+        message: "Comment deleted successfully",
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("ADD COMMENT ERROR:", error);
+    console.error("DELETE COMMENT ERROR:", error);
 
     return NextResponse.json(
       {
@@ -94,5 +104,3 @@ export async function POST(
     );
   }
 }
-
-

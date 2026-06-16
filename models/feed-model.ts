@@ -1,45 +1,97 @@
-import mongoose from "mongoose";
+import mongoose, { Document, Schema, Types } from "mongoose";
 
-const feedSchema = new mongoose.Schema({
-	description : {
-		type : String,
-		required : true,
-	},
-	file : {
-		type : String,
-	},
-	tags: {
-		type: [String],
-		default: []
-	},	
-	createdBy: {
-		type: mongoose.Schema.Types.ObjectId,
-		ref: "User",
-		required: true
-	},	
-	likes : {
-		type : Number,
-		default : 0
-	},
-	comments: [
-    {
-      createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
+export interface IComment {
+  _id?: Types.ObjectId;
+  createdBy: Types.ObjectId;
+  content: string;
+  createdAt?: Date;
+}
+
+export interface IFeed extends Document {
+  description: string;
+  file?: string;
+  tags: string[];
+
+  createdBy: Types.ObjectId;
+
+  likes: Types.ObjectId[];
+  bookmarks: Types.ObjectId[];
+
+  comments: IComment[];
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const commentSchema = new Schema<IComment>(
+  {
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    content: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+  },
+  {
+    timestamps: {
+      createdAt: true,
+      updatedAt: false,
+    },
+  }
+);
+
+const feedSchema = new Schema<IFeed>(
+  {
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    file: {
+      type: String,
+    },
+
+    tags: {
+      type: [String],
+      default: [],
+    },
+
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    // Store users who liked
+    likes: [
+      {
+        type: Schema.Types.ObjectId,
         ref: "User",
-        required: true,
       },
-      content: {
-        type: String,
-        required: true,
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
-    }
-  ]
-},{timestamps : true})
+    ],
 
-const feed = mongoose.models.Feed ||  mongoose.model("Feed", feedSchema);
+    // Store users who bookmarked
+    bookmarks: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
 
-export default feed
+    comments: [commentSchema],
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const Feed =
+  mongoose.models.Feed ||
+  mongoose.model<IFeed>("Feed", feedSchema);
+
+export default Feed;

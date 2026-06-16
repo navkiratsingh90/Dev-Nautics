@@ -4,14 +4,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { deleteComment } from "@/services/activity-apis";
 import { X, Send, MoreHorizontal, Trash2, MessageCircle } from "lucide-react";
+import axios from "axios";
+
+interface CommentUser {
+  _id: string;
+  username: string;
+}
 
 interface Comment {
   _id: string;
   content: string;
-  createdBy: {
-    _id: string;
-    username: string;
-  };
+  createdBy: CommentUser;
   createdAt: string;
 }
 
@@ -22,7 +25,6 @@ interface CommentModalProps {
   comments: Comment[];
   currentUserId: string;
   darkMode: boolean;
-  onAddComment: (activityId: string, content: string) => void | Promise<void>;
 }
 
 function formatDate(dateString: string) {
@@ -41,7 +43,6 @@ const CommentModal: React.FC<CommentModalProps> = ({
   comments = [],
   currentUserId,
   darkMode,
-  onAddComment,
 }) => {
   const [content, setContent] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -56,15 +57,18 @@ const CommentModal: React.FC<CommentModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setContent("");
-      setOpenMenuId(null);
-      setIsPosting(false);
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
-  }, [isOpen]);
 
-  const canPost = useMemo(() => content.trim().length > 0 && !isPosting, [content, isPosting]);
+    setContent("");
+    setOpenMenuId(null);
+    setIsPosting(false);
+  }, [isOpen]);
+  const canPost = useMemo(
+    () => content.trim().length > 0 && !isPosting,
+    [content, isPosting]
+  );
 
   if (!isOpen) return null;
 
@@ -74,35 +78,48 @@ const CommentModal: React.FC<CommentModalProps> = ({
 
     try {
       setIsPosting(true);
-      await onAddComment(activityId, trimmed);
 
-      const optimisticComment: Comment = {
-        _id: `temp-${Date.now()}`,
-        content: trimmed,
-        createdBy: {
-          _id: currentUserId,
-          username: "you",
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      setLocalComments((prev) => [...prev, optimisticComment]);
+      const response  = await axios.post(`/api/activity/${activityId}/comment`, {
+        content
+      })
+      console.log(response.data);
+      
+      const comments = response.data.activity.comments
+      setLocalComments((prev) => [...prev, comments[comments.length - 1]]);
       setContent("");
-      setOpenMenuId(null);
+      // setOpenMenuId(null);
     } catch (error) {
       console.error("Add comment error:", error);
     } finally {
       setIsPosting(false);
     }
   };
+  // const getComments = async () => {
+  //   try {
 
+  //     const response  = await axios.post(`/api/activity/${activityId}/comment`)
+  //     console.log(response.data);
+  //     // setOpenMenuId(null);
+  //   } catch (error) {
+  //     console.error("Add comment error:", error);
+  //   } finally {
+  //   }
+  // };
   const handleDeleteComment = async (commentId: string) => {
     try {
-      await deleteComment(activityId, commentId);
-      setLocalComments((prev) => prev.filter((comment) => comment._id !== commentId));
-      setOpenMenuId(null);
-    } catch (error) {
-      console.error("Delete comment error:", error);
+      const { data } = await axios.delete(
+        `/api/activity/${activityId}/comment/${commentId}`
+      );
+
+      if (data.success) {
+        setLocalComments((prev) =>
+          prev.filter((comment) => comment._id !== commentId)
+        );
+        setOpenMenuId(null);
+      }
+    } catch (error: any) {
+      console.error(error.response?.data?.message);
+      
     }
   };
 
@@ -113,7 +130,9 @@ const CommentModal: React.FC<CommentModalProps> = ({
     >
       <div
         className={`w-full max-w-2xl rounded-3xl border shadow-2xl overflow-hidden ${
-          darkMode ? "bg-gray-900 border-gray-800 text-white" : "bg-white border-[#E8EDF2] text-[#0D1B2A]"
+          darkMode
+            ? "bg-gray-900 border-gray-800 text-white"
+            : "bg-white border-[#E8EDF2] text-[#0D1B2A]"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -128,11 +147,20 @@ const CommentModal: React.FC<CommentModalProps> = ({
               <MessageCircle className="w-5 h-5" />
             </div>
             <div>
-              <h2 className={`m-0 text-base sm:text-lg font-bold ${darkMode ? "text-white" : "text-[#0D1B2A]"}`}>
+              <h2
+                className={`m-0 text-base sm:text-lg font-bold ${
+                  darkMode ? "text-white" : "text-[#0D1B2A]"
+                }`}
+              >
                 Comments
               </h2>
-              <p className={`m-0 text-xs ${darkMode ? "text-gray-400" : "text-[#64748B]"}`}>
-                {localComments.length} comment{localComments.length !== 1 ? "s" : ""}
+              <p
+                className={`m-0 text-xs ${
+                  darkMode ? "text-gray-400" : "text-[#64748B]"
+                }`}
+              >
+                {localComments.length} comment
+                {localComments.length !== 1 ? "s" : ""}
               </p>
             </div>
           </div>
@@ -155,13 +183,23 @@ const CommentModal: React.FC<CommentModalProps> = ({
           {localComments.length === 0 ? (
             <div
               className={`rounded-2xl border px-5 py-10 text-center ${
-                darkMode ? "border-gray-800 bg-gray-950/40" : "border-[#E8EDF2] bg-[#F8FAFB]"
+                darkMode
+                  ? "border-gray-800 bg-gray-950/40"
+                  : "border-[#E8EDF2] bg-[#F8FAFB]"
               }`}
             >
-              <p className={`m-0 text-sm font-medium ${darkMode ? "text-gray-300" : "text-[#64748B]"}`}>
+              <p
+                className={`m-0 text-sm font-medium ${
+                  darkMode ? "text-gray-300" : "text-[#64748B]"
+                }`}
+              >
                 No comments yet.
               </p>
-              <p className={`m-0 mt-1 text-xs ${darkMode ? "text-gray-500" : "text-[#94A3B8]"}`}>
+              <p
+                className={`m-0 mt-1 text-xs ${
+                  darkMode ? "text-gray-500" : "text-[#94A3B8]"
+                }`}
+              >
                 Start the conversation below.
               </p>
             </div>
@@ -173,11 +211,13 @@ const CommentModal: React.FC<CommentModalProps> = ({
                 <div
                   key={comment._id}
                   className={`flex gap-3 rounded-2xl border p-4 ${
-                    darkMode ? "border-gray-800 bg-gray-950/40" : "border-[#E8EDF2] bg-[#F8FAFB]"
+                    darkMode
+                      ? "border-gray-800 bg-gray-950/40"
+                      : "border-[#E8EDF2] bg-[#F8FAFB]"
                   }`}
                 >
                   <div className="w-10 h-10 rounded-2xl bg-[#EDF7F3] border border-[#A7F3D0] flex items-center justify-center text-[#0EA472] font-bold shrink-0">
-                    {comment.createdBy.username?.slice(0, 2).toUpperCase()}
+                    {comment.createdBy.username.slice(0, 2).toUpperCase()}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -191,7 +231,11 @@ const CommentModal: React.FC<CommentModalProps> = ({
                         >
                           {comment.createdBy.username}
                         </Link>
-                        <p className={`m-0 mt-0.5 text-xs ${darkMode ? "text-gray-500" : "text-[#94A3B8]"}`}>
+                        <p
+                          className={`m-0 mt-0.5 text-xs ${
+                            darkMode ? "text-gray-500" : "text-[#94A3B8]"
+                          }`}
+                        >
                           {formatDate(comment.createdAt)}
                         </p>
                       </div>
@@ -200,7 +244,9 @@ const CommentModal: React.FC<CommentModalProps> = ({
                         <div className="relative shrink-0">
                           <button
                             onClick={() =>
-                              setOpenMenuId((prev) => (prev === comment._id ? null : comment._id))
+                              setOpenMenuId((prev) =>
+                                prev === comment._id ? null : comment._id
+                              )
                             }
                             className={`w-8 h-8 rounded-xl border flex items-center justify-center transition ${
                               darkMode
@@ -237,7 +283,11 @@ const CommentModal: React.FC<CommentModalProps> = ({
                       )}
                     </div>
 
-                    <p className={`mt-2 mb-0 text-[13px] leading-relaxed ${darkMode ? "text-gray-300" : "text-[#64748B]"}`}>
+                    <p
+                      className={`mt-2 mb-0 text-[13px] leading-relaxed ${
+                        darkMode ? "text-gray-300" : "text-[#64748B]"
+                      }`}
+                    >
                       {comment.content}
                     </p>
                   </div>

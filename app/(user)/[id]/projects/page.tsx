@@ -1,253 +1,515 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useAppSelector } from "@/redux/hooks";
+import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Github, ExternalLink, X, Layers, Sparkles } from "lucide-react";
+import {
+  Plus,
+  Github,
+  ExternalLink,
+  X,
+  Sparkles,
+  Trash2,
+  Image as ImageIcon,
+} from "lucide-react";
 
-// Types
 interface Project {
-  _id: string;
-  name: string;
-  description: string;
-  githubLink: string;
-  liveLink: string;
-  techStack: string[];
+  _id?: string;
+  title: string;
+  description?: string;
   file?: string;
+  techStack: string[];
+  role?: string;
+  duration?: string;
+  githubLink?: string;
+  liveLink?: string;
 }
 
-// Dummy data
-const dummyProjects: Project[] = [
-  {
-    _id: "1",
-    name: "E‑Commerce Platform",
-    description: "Full‑stack e‑commerce with React, Node.js, and MongoDB. Features include user auth, product filtering, cart, and payment integration.",
-    githubLink: "https://github.com/user/ecommerce",
-    liveLink: "https://ecommerce-demo.com",
-    techStack: ["React", "Node.js", "MongoDB", "Tailwind"],
-    file: "https://images.unsplash.com/photo-1557821552-17105176677c?w=600&h=300&fit=crop",
-  },
-  {
-    _id: "2",
-    name: "Portfolio Website",
-    description: "Personal portfolio built with Next.js and Tailwind CSS, featuring dark mode, blog integration, and smooth animations.",
-    githubLink: "https://github.com/user/portfolio",
-    liveLink: "https://portfolio.com",
-    techStack: ["Next.js", "Tailwind", "TypeScript"],
-    file: "https://images.unsplash.com/photo-1545235617-9465d2a55698?w=600&h=300&fit=crop",
-  },
-];
-
-// Simple Modal component
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl rounded-2xl border border-[#E8EDF2] bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#E8EDF2] px-5 sm:px-6 py-4">
+          <h2 className="text-lg font-bold text-[#0D1B2A]">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-[#94A3B8] hover:text-[#0D1B2A]"
+            aria-label="Close modal"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="max-h-[85vh] overflow-y-auto p-5 sm:p-6">
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(dummyProjects);
+  const user = useAppSelector((state: any) => state.User.userData);
+
+  const [projects, setProjects] = useState<Project[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
+
+  const [form, setForm] = useState<{
+    title: string;
+    description: string;
+    githubLink: string;
+    liveLink: string;
+    role: string;
+    duration: string;
+    techStack: string;
+    image: File | null;
+  }>({
+    title: "",
     description: "",
     githubLink: "",
     liveLink: "",
+    role: "",
+    duration: "",
     techStack: "",
-    file: "",
+    image: null,
   });
 
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  const fetchProjects = async () => {
+    try {
+      const { data } = await axios.get("/api/project");
+      setProjects(data?.projects || []);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to load projects");
+    }
   };
 
-  const addProject = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      if (Array.isArray(user.projects)) {
+        setProjects(user.projects);
+      }
+      fetchProjects();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const sortedProjects = useMemo(() => {
+    return [...projects].reverse();
+  }, [projects]);
+
+  const handleInput = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setForm((prev) => ({ ...prev, image: file }));
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    if (file) {
+      setPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setPreviewUrl("");
+    }
+  };
+
+  const resetForm = () => {
+    setForm({
+      title: "",
+      description: "",
+      githubLink: "",
+      liveLink: "",
+      role: "",
+      duration: "",
+      techStack: "",
+      image: null,
+    });
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("Project name is required");
+
+    if (!form.title.trim()) {
+      toast.error("Project title is required");
       return;
     }
-    const newProject: Project = {
-      _id: Date.now().toString(),
-      name: form.name,
-      description: form.description,
-      githubLink: form.githubLink,
-      liveLink: form.liveLink,
-      techStack: form.techStack.split(",").map((t) => t.trim()).filter(Boolean),
-      file: form.file || "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&h=300&fit=crop",
-    };
-    setProjects([newProject, ...projects]);
-    setForm({ name: "", description: "", githubLink: "", liveLink: "", techStack: "", file: "" });
-    setShowModal(false);
-    toast.success("Project added successfully!");
+
+    try {
+      setIsSubmitting(true);
+
+      const formData = new FormData();
+      formData.append("title", form.title.trim());
+      formData.append("description", form.description.trim());
+      formData.append("githubLink", form.githubLink.trim());
+      formData.append("liveLink", form.liveLink.trim());
+      formData.append("role", form.role.trim());
+      formData.append("duration", form.duration.trim());
+      formData.append("techStack", form.techStack.trim());
+
+      if (form.image) {
+        formData.append("file", form.image);
+      }
+
+      const { data } = await axios.post("/api/user/project", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      toast.success(data?.message || "Project added successfully!");
+      setShowModal(false);
+      resetForm();
+      await fetchProjects();
+    } catch (error: any) {
+      console.error(error?.response?.data?.message || "Failed to create project");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  const handleDelete = async (projectId: string) => {
+    try {
+      setDeleteLoadingId(projectId);
+      const { data } = await axios.delete(`/api/project/${projectId}`);
+      toast.success(data?.message || "Project deleted successfully");
+      setProjects((prev) => prev.filter((project) => project._id !== projectId));
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to delete project");
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFB]">
+        <div className="text-[#64748B]">Loading profile...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
+    <div className="min-h-screen bg-[#F8FAFB] px-4 py-8 font-['Inter',-apple-system,BlinkMacSystemFont,sans-serif] sm:px-6">
+      <div className="mx-auto max-w-6xl space-y-8">
         <div>
-          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs text-green-700 mb-3">
-            <Sparkles className="w-3.5 h-3.5" /> Development work
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#A7F3D0] bg-[#EDF7F3] px-3 py-1 text-xs text-[#047857]">
+            <Sparkles className="h-3.5 w-3.5" />
+            Development work
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Projects Portfolio</h1>
-          <p className="text-sm text-gray-500 mt-1">Showcase of my development work and collaborations</p>
+          <h1 className="text-3xl font-extrabold tracking-[-0.8px] text-[#0D1B2A]">
+            Projects Portfolio
+          </h1>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Showcase of your development work and collaborations
+          </p>
         </div>
 
-        {/* Projects List */}
         <div className="space-y-6">
-          {projects.map((project) => (
-            <div key={project._id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="flex flex-col md:flex-row">
-                {/* Image */}
-                {project.file && (
-                  <div className="md:w-2/5 h-48 md:h-auto relative overflow-hidden bg-gray-100">
-                    <img src={project.file} alt={project.name} className="w-full h-full object-cover" />
-                  </div>
-                )}
-                {/* Content */}
-                <div className="flex-1 p-6">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
-                    <h3 className="text-xl font-bold text-gray-900">{project.name}</h3>
-                    <div className="flex gap-2">
-                      <a
-                        href={project.githubLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
-                      >
-                        <Github className="h-4 w-4" />
-                      </a>
-                      <a
-                        href={project.liveLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
+          {sortedProjects.length === 0 ? (
+            <div className="rounded-2xl border border-[#E8EDF2] bg-white py-12 text-center">
+              <p className="text-[#64748B]">
+                No projects yet. Add your first project!
+              </p>
+            </div>
+          ) : (
+            sortedProjects.map((project) => (
+              <div
+                key={project._id}
+                className="overflow-hidden rounded-2xl border border-[#E8EDF2] bg-white shadow-sm"
+              >
+                <div className="flex flex-col md:flex-row">
+                  {project.file && (
+                    <div className="relative h-52 overflow-hidden bg-[#F8FAFB] md:h-auto md:w-2/5">
+                      <img
+                        src={project.file}
+                        alt={project.title}
+                        className="h-full w-full object-cover"
+                      />
                     </div>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed mb-4">{project.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {project.techStack.map((tech, i) => (
-                      <span key={i} className="text-xs font-medium px-3 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                        {tech}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="pt-3 border-t border-gray-200 text-xs text-gray-500">
-                    <a href={project.liveLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-blue-600 hover:underline">
-                      Live Demo <ExternalLink className="ml-1 h-3 w-3" />
-                    </a>
+                  )}
+
+                  <div className="flex-1 p-6">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-[#0D1B2A]">
+                          {project.title}
+                        </h3>
+                        {(project.role || project.duration) && (
+                          <p className="mt-1 text-sm text-[#64748B]">
+                            {project.role}
+                            {project.role && project.duration ? " • " : ""}
+                            {project.duration}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
+                        {project.githubLink && (
+                          <a
+                            href={project.githubLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg bg-[#F8FAFB] p-2 text-[#64748B] transition hover:bg-[#E8EDF2]"
+                            aria-label="GitHub link"
+                          >
+                            <Github className="h-4 w-4" />
+                          </a>
+                        )}
+                        {project.liveLink && (
+                          <a
+                            href={project.liveLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg bg-[#0D1B2A] p-2 text-white transition hover:bg-[#1E3A5F]"
+                            aria-label="Live link"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => project._id && handleDelete(project._id)}
+                          disabled={
+                            !project._id || deleteLoadingId === project._id
+                          }
+                          className="rounded-lg border border-[#E8EDF2] p-2 text-[#64748B] transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                          aria-label="Delete project"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {project.description && (
+                      <p className="mb-4 text-sm leading-relaxed text-[#64748B]">
+                        {project.description}
+                      </p>
+                    )}
+
+                    {project.techStack?.length > 0 && (
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {project.techStack.map((tech, i) => (
+                          <span
+                            key={i}
+                            className="rounded-full border border-[#E8EDF2] bg-[#F8FAFB] px-3 py-1 text-xs font-medium text-[#64748B]"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="border-t border-[#E8EDF2] pt-3 text-xs text-[#64748B]">
+                      {project.liveLink && (
+                        <a
+                          href={project.liveLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-[#0EA472] hover:underline"
+                        >
+                          Live Demo
+                          <ExternalLink className="ml-1 h-3 w-3" />
+                        </a>
+                      )}
+                      {project.githubLink && (
+                        <a
+                          href={project.githubLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-4 inline-flex items-center text-[#64748B] hover:underline"
+                        >
+                          GitHub
+                          <ExternalLink className="ml-1 h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
-        {/* Add Project Button */}
         <div className="flex justify-center">
           <button
             onClick={() => setShowModal(true)}
-            className="border-2 border-dashed border-gray-300 rounded-2xl px-8 py-6 flex flex-col items-center gap-3 hover:border-gray-400 hover:bg-gray-100 transition"
+            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#D8E1E8] px-8 py-6 transition hover:border-[#B9C4CF] hover:bg-[#F2F5F8]"
           >
-            <div className="w-12 h-12 rounded-xl bg-gray-200 flex items-center justify-center text-gray-600">
-              <Plus className="w-5 h-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8EDF2] text-[#64748B]">
+              <Plus className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-gray-900">Add New Project</h3>
-              <p className="text-xs text-gray-500">Showcase your work</p>
+              <h3 className="text-base font-semibold text-[#0D1B2A]">
+                Add New Project
+              </h3>
+              <p className="text-xs text-[#64748B]">Showcase your work</p>
             </div>
           </button>
         </div>
       </div>
 
-      {/* Add Project Modal */}
       {showModal && (
         <Modal title="Add New Project" onClose={() => setShowModal(false)}>
-          <form onSubmit={addProject} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Project Title *
+              </label>
               <input
-                name="name"
-                value={form.name}
+                name="title"
+                value={form.title}
                 onChange={handleInput}
                 required
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Description
+              </label>
               <textarea
                 name="description"
                 rows={3}
                 value={form.description}
                 onChange={handleInput}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full resize-none rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tech Stack (comma separated)</label>
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Role
+              </label>
+              <input
+                name="role"
+                value={form.role}
+                onChange={handleInput}
+                placeholder="Frontend Developer"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Duration
+              </label>
+              <input
+                name="duration"
+                value={form.duration}
+                onChange={handleInput}
+                placeholder="Jan 2025 - Apr 2025"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Tech Stack (comma separated)
+              </label>
               <input
                 name="techStack"
                 value={form.techStack}
                 onChange={handleInput}
                 placeholder="React, Node.js, MongoDB"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">GitHub Link</label>
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                GitHub Link
+              </label>
               <input
                 name="githubLink"
                 value={form.githubLink}
                 onChange={handleInput}
                 type="url"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Live Project Link</label>
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Live Project Link
+              </label>
               <input
                 name="liveLink"
                 value={form.liveLink}
                 onChange={handleInput}
                 type="url"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Image URL (optional)</label>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+                Project Image
+              </label>
               <input
-                name="file"
-                value={form.file}
-                onChange={handleInput}
-                placeholder="https://..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none"
               />
+              {previewUrl && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-[#E8EDF2]">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="h-52 w-full object-cover"
+                  />
+                </div>
+              )}
             </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+
+            <div className="md:col-span-2 flex gap-3 border-t border-[#E8EDF2] pt-4">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
-                className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                onClick={() => {
+                  setShowModal(false);
+                  resetForm();
+                }}
+                className="flex-1 rounded-lg border border-[#E8EDF2] py-2 text-[#64748B] transition hover:bg-[#F8FAFB]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800"
+                disabled={isSubmitting}
+                className="flex-1 rounded-lg bg-[#0D1B2A] py-2 text-white transition hover:bg-[#1E3A5F] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Add Project
+                {isSubmitting ? "Adding..." : "Add Project"}
               </button>
             </div>
           </form>
