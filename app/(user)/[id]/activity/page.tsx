@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { useAppSelector } from "@/redux/hooks";
 import axios from "axios";
 import { toast } from "sonner";
-import { useSelector } from "react-redux";
 import {
   Bookmark,
   Heart,
@@ -15,7 +16,9 @@ import {
   X,
 } from "lucide-react";
 import CommentModal from "@/components/Comment-Modal";
+import ActivityCard from "@/components/ActivityCard";
 
+// ─── Types (aligned with your backend) ──────────────────────────────────────
 interface ActivityComment {
   _id: string;
   content: string;
@@ -38,185 +41,21 @@ interface Activity {
     username: string;
   };
   createdAt: string;
+  bookmark: string[];
   updatedAt?: string;
 }
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
-function ActivityCard({
-  activity,
-  currentUserId,
-  isBookmarked,
-  onLike,
-  onComment,
-  onBookmark,
-  onDelete,
-}: {
-  activity: Activity;
-  currentUserId: string;
-  isBookmarked: boolean;
-  onLike: (id: string) => void;
-  onComment: (id: string) => void;
-  onBookmark: (id: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  const isOwnPost = activity.createdBy._id === currentUserId;
-
-  return (
-    <div className="bg-white border border-[#E8EDF2] rounded-2xl shadow-sm overflow-hidden">
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-[#EDF7F3] border border-[#A7F3D0] flex items-center justify-center text-[#0EA472] font-bold shrink-0">
-              {activity.createdBy.username.slice(0, 2).toUpperCase()}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="m-0 text-sm font-semibold text-[#0D1B2A]">
-                  {activity.createdBy.username}
-                </p>
-                <span className="text-[11px] text-[#94A3B8]">
-                  {timeAgo(activity.createdAt)}
-                </span>
-              </div>
-              <p className="m-0 text-[12px] text-[#64748B]">Shared an activity</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onBookmark(activity._id)}
-              className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition ${
-                isBookmarked
-                  ? "bg-[#EDF7F3] border-[#A7F3D0] text-[#0EA472]"
-                  : "bg-white border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB]"
-              }`}
-              aria-label="Bookmark post"
-            >
-              <Bookmark
-                className="w-4 h-4"
-                fill={isBookmarked ? "currentColor" : "none"}
-              />
-            </button>
-
-            {isOwnPost && (
-              <button
-                onClick={() => onDelete(activity._id)}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-[#E8EDF2] text-[#64748B] hover:text-red-500 hover:bg-red-50 transition"
-                aria-label="Delete post"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <p className="mt-4 text-[13.5px] text-[#64748B] leading-relaxed whitespace-pre-wrap">
-          {activity.description}
-        </p>
-
-        {activity.file && (
-          <div className="mt-4">
-            <img
-              src={activity.file}
-              alt="activity"
-              className="w-full max-h-96 object-cover rounded-xl border border-[#E8EDF2]"
-            />
-          </div>
-        )}
-
-        {activity.tags?.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {activity.tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F8FAFB] border border-[#E8EDF2] text-[11px] text-[#64748B]"
-              >
-                <Tag className="w-3 h-3 text-[#0EA472]" />
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-5 pt-4 border-t border-[#E8EDF2] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-4 text-xs text-[#64748B]">
-            <span>{activity.likes} likes</span>
-            <button
-              onClick={() => onComment(activity._id)}
-              className="hover:text-[#0EA472] transition"
-            >
-              {activity.comments?.length || 0} comments
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onLike(activity._id)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
-            >
-              <Heart className="w-4 h-4 text-[#0EA472]" />
-              Like
-            </button>
-
-            <button
-              onClick={() => onComment(activity._id)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
-            >
-              <MessageCircle className="w-4 h-4 text-[#0EA472]" />
-              Comment
-            </button>
-          </div>
-        </div>
-
-        {activity.comments?.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {activity.comments.slice(0, 2).map((comment, idx) => (
-              <div
-                key={comment._id || idx}
-                className="bg-[#F8FAFB] border border-[#E8EDF2] rounded-xl px-3 py-2"
-              >
-                <p className="m-0 text-[12px] leading-relaxed text-[#64748B]">
-                  <span className="font-semibold text-[#0D1B2A]">
-                    {comment.createdBy.username}
-                  </span>{" "}
-                  {comment.content}
-                </p>
-              </div>
-            ))}
-
-            {activity.comments.length > 2 && (
-              <button
-                onClick={() => onComment(activity._id)}
-                className="text-[12px] font-medium text-[#0EA472] hover:underline"
-              >
-                View all {activity.comments.length} comments
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
+// ─── Main Component ──────────────────────────────────────────────────────────
 export default function ActivityPage() {
-  const darkMode = false
-  const currentUserId = useSelector((state: any) => state.User.userData?._id) || "";
+  const params = useParams();
+  const userId = params?.id as string; // from /profile/[id]/activity
+
+  const currentUser = useAppSelector((state: any) => state.User.userData);
+  const currentUserId = currentUser?._id || "";
 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -234,18 +73,26 @@ export default function ActivityPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Determine if the viewed profile belongs to the logged‑in user
+  const isOwn = currentUser && currentUser._id === userId;
+
+  // ── Fetch activities for the given userId ──────────────────────────────────
   const fetchActivities = async () => {
+    if (!userId) {
+      setError("No user ID provided");
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const { data } = await axios.get("/api/activity");
-
+      const { data } = await axios.get(`/api/user/${userId}/activity`);
       if (data.success) {
         setActivities(data.activities || []);
       } else {
-        toast.error(data.message || "Failed to load activities");
+        setError(data.message || "Failed to load activities");
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to load activities");
+      setError(error.response?.data?.message || "Failed to load activities");
     } finally {
       setLoading(false);
     }
@@ -253,8 +100,9 @@ export default function ActivityPage() {
 
   useEffect(() => {
     fetchActivities();
-  }, []);
+  }, [userId]);
 
+  // ── Form helpers ──────────────────────────────────────────────────────────
   const resetForm = () => {
     setForm({ description: "", tags: "" });
     setSelectedFile(null);
@@ -274,19 +122,17 @@ export default function ActivityPage() {
       const fd = new FormData();
       fd.append("description", form.description.trim());
       fd.append("tags", form.tags);
-
       if (selectedFile) {
         fd.append("file", selectedFile);
       }
 
       const { data } = await axios.post("/api/activity", fd, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (data.success) {
-        setActivities((prev) => [data.activity, ...prev]);
+        // Refresh activities
+        await fetchActivities();
         toast.success("Activity posted successfully");
         resetForm();
         setShowForm(false);
@@ -298,7 +144,9 @@ export default function ActivityPage() {
     }
   };
 
-  const handleLike = (id: string) => {
+  // ── Activity handlers ──────────────────────────────────────────────────────
+  const handleLike = async (id: string) => {
+    // Optimistic update
     setActivities((prev) =>
       prev.map((activity) =>
         activity._id === id
@@ -306,21 +154,39 @@ export default function ActivityPage() {
           : activity
       )
     );
+    try {
+      await axios.post(`/api/activity/${id}/like`);
+    } catch {
+      // Revert optimistic update
+      setActivities((prev) =>
+        prev.map((activity) =>
+          activity._id === id
+            ? { ...activity, likes: activity.likes - 1 }
+            : activity
+        )
+      );
+      toast.error("Failed to like");
+    }
   };
 
-  const handleBookmark = (id: string) => {
-    setBookmarks((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const handleBookmark = async (id: string) => {
+    try {
+      await axios.post(`/api/activity/${id}/bookmark`);
+      // Toggle local bookmark state
+      setBookmarks((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        return newSet;
+      });
+      toast.success("Bookmark toggled");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to bookmark");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    const ok = window.confirm("Delete this activity?");
-    if (!ok) return;
-
+    if (!window.confirm("Delete this activity?")) return;
     try {
       await axios.delete(`/api/activity/${id}`);
       setActivities((prev) => prev.filter((activity) => activity._id !== id));
@@ -333,7 +199,6 @@ export default function ActivityPage() {
   const handleOpenComments = (activityId: string) => {
     const activity = activities.find((item) => item._id === activityId);
     if (!activity) return;
-
     setSelectedActivity(activity);
     setShowComments(true);
   };
@@ -365,12 +230,30 @@ export default function ActivityPage() {
         ? { ...prev, comments: [...prev.comments, newComment] }
         : prev
     );
+
+    try {
+      await axios.post(`/api/activity/${activityId}/comment`, { content: trimmed });
+    } catch {
+      // Revert optimistic update
+      setActivities((prev) =>
+        prev.map((activity) =>
+          activity._id === activityId
+            ? {
+                ...activity,
+                comments: activity.comments.filter(
+                  (c) => c._id !== newComment._id
+                ),
+              }
+            : activity
+        )
+      );
+      toast.error("Failed to add comment");
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
   };
@@ -381,45 +264,55 @@ export default function ActivityPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ── Loading / error states ──────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading activities...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div
-      className={`min-h-screen pt-16 font-['Inter',-apple-system,BlinkMacSystemFont,sans-serif] ${
-        darkMode ? "bg-gray-950 text-white" : "bg-[#F8FAFB] text-[#0D1B2A]"
-      }`}
-    >
+    <div className="bg-[#F8FAFB] min-h-screen font-['Inter',-apple-system,sans-serif] pt-16">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1
-              className={`text-3xl font-extrabold tracking-[-0.8px] ${
-                darkMode ? "text-white" : "text-[#0D1B2A]"
-              }`}
-            >
-              Your Activity
+            <h1 className="text-3xl font-extrabold tracking-[-0.8px] text-[#0D1B2A]">
+              {isOwn ? "Your Activity" : "User Activity"}
             </h1>
-            <p className={`mt-1 text-sm ${darkMode ? "text-gray-400" : "text-[#64748B]"}`}>
-              Post updates and view only your own activities
+            <p className="mt-1 text-sm text-[#64748B]">
+              {isOwn
+                ? "Post updates and view only your own activities"
+                : "Activities posted by this user"}
             </p>
           </div>
 
-          <button
-            onClick={() => setShowForm((prev) => !prev)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0D1B2A] text-white text-sm font-semibold hover:bg-[#1E3A5F] transition"
-          >
-            <Plus className="w-4 h-4" />
-            New Activity
-          </button>
+          {isOwn && (
+            <button
+              onClick={() => setShowForm((prev) => !prev)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0D1B2A] text-white text-sm font-semibold hover:bg-[#1E3A5F] transition"
+            >
+              <Plus className="w-4 h-4" />
+              New Activity
+            </button>
+          )}
         </div>
 
-        {showForm && (
-          <div
-            className={`rounded-2xl border shadow-sm p-5 ${
-              darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-[#E8EDF2]"
-            }`}
-          >
+        {isOwn && showForm && (
+          <div className="rounded-2xl border shadow-sm p-5 bg-white border-[#E8EDF2]">
             <form onSubmit={handleCreateActivity} className="space-y-4">
               <div>
-                <label className={`block text-sm font-medium mb-1 ${darkMode ? "text-gray-300" : "text-[#0D1B2A]"}`}>
+                <label className="block text-sm font-medium text-[#0D1B2A] mb-1">
                   What are you working on?
                 </label>
                 <textarea
@@ -429,17 +322,13 @@ export default function ActivityPage() {
                   }
                   rows={4}
                   placeholder="Share your latest project, progress, or thoughts..."
-                  className={`w-full px-4 py-3 rounded-xl border outline-none resize-none focus:ring-2 focus:ring-[#0EA472]/25 ${
-                    darkMode
-                      ? "bg-gray-950 border-gray-800 text-white placeholder:text-gray-500"
-                      : "bg-white border-[#E8EDF2] text-[#0D1B2A] placeholder:text-[#94A3B8]"
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl border border-[#E8EDF2] outline-none resize-none focus:ring-2 focus:ring-[#0EA472]/25"
                   required
                 />
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-1 ${darkMode ? "text-gray-300" : "text-[#0D1B2A]"}`}>
+                <label className="block text-sm font-medium text-[#0D1B2A] mb-1">
                   Upload Image
                 </label>
                 <input
@@ -447,14 +336,10 @@ export default function ActivityPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
-                  className={`w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#0EA472]/25 ${
-                    darkMode
-                      ? "bg-gray-950 border-gray-800 text-white file:text-white"
-                      : "bg-white border-[#E8EDF2] text-[#0D1B2A]"
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl border border-[#E8EDF2] outline-none focus:ring-2 focus:ring-[#0EA472]/25"
                 />
                 {selectedFile && (
-                  <p className={`mt-2 text-xs ${darkMode ? "text-gray-400" : "text-[#64748B]"}`}>
+                  <p className="mt-2 text-xs text-[#64748B]">
                     Selected: {selectedFile.name}
                   </p>
                 )}
@@ -478,7 +363,7 @@ export default function ActivityPage() {
               )}
 
               <div>
-                <label className={`block text-sm font-medium mb-1 ${darkMode ? "text-gray-300" : "text-[#0D1B2A]"}`}>
+                <label className="block text-sm font-medium text-[#0D1B2A] mb-1">
                   Tags (comma separated)
                 </label>
                 <input
@@ -488,11 +373,7 @@ export default function ActivityPage() {
                     setForm((prev) => ({ ...prev, tags: e.target.value }))
                   }
                   placeholder="React, Next.js, MERN, AI"
-                  className={`w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#0EA472]/25 ${
-                    darkMode
-                      ? "bg-gray-950 border-gray-800 text-white placeholder:text-gray-500"
-                      : "bg-white border-[#E8EDF2] text-[#0D1B2A] placeholder:text-[#94A3B8]"
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl border border-[#E8EDF2] outline-none focus:ring-2 focus:ring-[#0EA472]/25"
                 />
               </div>
 
@@ -503,11 +384,7 @@ export default function ActivityPage() {
                     setShowForm(false);
                     resetForm();
                   }}
-                  className={`px-5 py-2.5 rounded-xl border text-sm font-semibold ${
-                    darkMode
-                      ? "border-gray-800 text-gray-300 hover:bg-gray-800"
-                      : "border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB]"
-                  }`}
+                  className="px-5 py-2.5 rounded-xl border border-[#E8EDF2] text-sm font-semibold text-[#64748B] hover:bg-[#F8FAFB]"
                 >
                   Cancel
                 </button>
@@ -524,22 +401,12 @@ export default function ActivityPage() {
           </div>
         )}
 
-        {loading ? (
-          <div
-            className={`rounded-2xl border p-10 text-center ${
-              darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-[#E8EDF2]"
-            }`}
-          >
-            Loading your activities...
-          </div>
-        ) : activities.length === 0 ? (
-          <div
-            className={`rounded-2xl border p-10 text-center ${
-              darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-[#E8EDF2]"
-            }`}
-          >
-            <p className={darkMode ? "text-gray-400" : "text-[#64748B]"}>
-              No activities yet. Share your first update.
+        {activities.length === 0 ? (
+          <div className="rounded-2xl border p-10 text-center bg-white border-[#E8EDF2]">
+            <p className="text-[#64748B]">
+              {isOwn
+                ? "No activities yet. Share your first update."
+                : "No activities posted by this user yet."}
             </p>
           </div>
         ) : (
@@ -566,8 +433,8 @@ export default function ActivityPage() {
         activityId={selectedActivity?._id || ""}
         comments={selectedActivity?.comments || []}
         currentUserId={currentUserId}
-        darkMode={darkMode}
-        onAddComment={handleAddComment}
+        darkMode={false}
+        // onAddComment={handleAddComment}
       />
     </div>
   );

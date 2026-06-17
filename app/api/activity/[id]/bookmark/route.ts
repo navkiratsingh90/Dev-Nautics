@@ -7,11 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
 interface Params {
   params: Promise<{
     id: string;
-    commentId: string;
   }>;
 }
 
-export async function DELETE(
+export async function POST(
   req: NextRequest,
   { params }: Params
 ) {
@@ -44,7 +43,7 @@ export async function DELETE(
       );
     }
 
-    const { id, commentId } = await params;
+    const { id } = await params;
 
     const activity = await Feed.findById(id);
 
@@ -58,49 +57,37 @@ export async function DELETE(
       );
     }
 
-    const comment = activity.comments.find(
-      (com: any) => com._id.toString() === commentId
+    const alreadyBookmarked = activity.bookmarks.some(
+      (bookmark: any) =>
+        bookmark.toString() === user._id.toString()
     );
 
-    if (!comment) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Comment not found",
-        },
-        { status: 404 }
+    if (alreadyBookmarked) {
+      activity.bookmarks = activity.bookmarks.filter(
+        (bookmark: any) =>
+          bookmark.toString() !== user._id.toString()
       );
+
+      await activity.save();
+
+      return NextResponse.json({
+        success: true,
+        bookmarked: false,
+        message: "Bookmark removed",
+      });
     }
 
-    // Only owner can delete
-    if (
-      comment.createdBy.toString() !==
-      user._id.toString()
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You can only delete your own comments",
-        },
-        { status: 403 }
-      );
-    }
-
-    activity.comments = activity.comments.filter(
-      (com: any) => com._id.toString() !== commentId
-    );
+    activity.bookmarks.push(user._id);
 
     await activity.save();
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Comment deleted successfully",
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      bookmarked: true,
+      message: "Bookmarked successfully",
+    });
   } catch (error) {
-    console.error("DELETE COMMENT ERROR:", error);
+    console.error("BOOKMARK ERROR:", error);
 
     return NextResponse.json(
       {

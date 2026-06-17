@@ -95,3 +95,39 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDb();
+
+    const { id } = await params;
+
+    const user = await User.findById(id).select("projects");
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      projects: user.projects,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Server Error",
+      },
+      { status: 500 }
+    );
+  }
+}

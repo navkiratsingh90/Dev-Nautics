@@ -1,49 +1,202 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
-import { getUserIdFromRequest } from '@/lib/auth';
-import User from '@/models/user-model';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
-const validCategories = [
-  'frontend', 'backend', 'tools', 'frameworks', 'libraries', 'languages'
-];
+const ALLOWED_CATEGORIES = [
+  "frontend",
+  "backend",
+  "tools",
+  "frameworks",
+  "libraries",
+  "languages",
+] as const;
 
-export async function PUT(req: NextRequest) {
+type SkillCategory = (typeof ALLOWED_CATEGORIES)[number];
+
+export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
+    await connectDb();
 
-    const { category, skill, action } = await req.json();
+    const session = await auth();
 
-    if (!validCategories.includes(category)) {
-      return NextResponse.json({ success: false, message: 'Invalid skill category' }, { status: 400 });
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
-    if (!skill || !action) {
-      return NextResponse.json({ success: false, message: 'Skill and action are required' }, { status: 400 });
+    const { category, skill } = await req.json();
+
+    if (!category || !skill?.trim()) {
+      return NextResponse.json(
+        { success: false, message: "Category and skill are required" },
+        { status: 400 }
+      );
     }
 
-    let updateQuery;
-    if (action === 'add') {
-      updateQuery = { $addToSet: { [`skills.${category}`]: skill } };
-    } else if (action === 'remove') {
-      updateQuery = { $pull: { [`skills.${category}`]: skill } };
-    } else {
-      return NextResponse.json({ success: false, message: "Action must be 'add' or 'remove'" }, { status: 400 });
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid skill category" },
+        { status: 400 }
+      );
     }
 
-    const updatedUser = await User.findByIdAndUpdate(userId, updateQuery, { new: true });
-    if (!updatedUser) {
-      return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
+    const user = await User.findOne({ email: session.user.email });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const normalizedSkill = skill.trim();
+
+    const skillsArray = user.skills?.[category] || [];
+
+    if (skillsArray.includes(normalizedSkill)) {
+      return NextResponse.json(
+        { success: false, message: "Skill already exists" },
+        { status: 400 }
+      );
+    }
+
+    user.skills[category] = [...skillsArray, normalizedSkill];
+
+    await user.save();
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Skill added successfully",
+        skills: user.skills,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("ADD SKILL ERROR:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDb();
+
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+    const { category, skill } = await req.json();
+
+    if (!category || !skill) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Category and skill are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findOne({
+      email: session.user.email,
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (!user.skills?.[category]) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid category",
+        },
+        { status: 400 }
+      );
+    }
+
+    user.skills[category] = user.skills[category].filter(
+      (item: string) => item !== skill
+    );
+
+    await user.save();
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Skill removed successfully",
+        skills: user.skills,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("REMOVE SKILL ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDb();
+
+    const { id } = await params;
+
+    const user = await User.findById(id).select("skills");
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: `Skill ${action}ed successfully`,
-      skills: updatedUser.skills,
+      skills: user.skills,
     });
   } catch (error) {
-    console.error('Update Skills Error:', error);
-    return NextResponse.json({ success: false, message: 'Server error while updating skills' }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Server Error",
+      },
+      { status: 500 }
+    );
   }
 }

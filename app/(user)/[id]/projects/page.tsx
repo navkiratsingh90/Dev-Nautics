@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
 import axios from "axios";
 import { toast } from "sonner";
@@ -11,7 +12,6 @@ import {
   X,
   Sparkles,
   Trash2,
-  Image as ImageIcon,
 } from "lucide-react";
 
 interface Project {
@@ -44,7 +44,7 @@ function Modal({
         className="w-full max-w-4xl rounded-2xl border border-[#E8EDF2] bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#E8EDF2] px-5 sm:px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[#E8EDF2] px-5 py-4 sm:px-6">
           <h2 className="text-lg font-bold text-[#0D1B2A]">{title}</h2>
           <button
             onClick={onClose}
@@ -54,21 +54,27 @@ function Modal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="max-h-[85vh] overflow-y-auto p-5 sm:p-6">
-          {children}
-        </div>
+        <div className="max-h-[85vh] overflow-y-auto p-5 sm:p-6">{children}</div>
       </div>
     </div>
   );
 }
 
 export default function ProjectsPage() {
-  const user = useAppSelector((state: any) => state.User.userData);
+  const params = useParams();
+  const rawUserId = params?.id;
+  const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+  const cleanUserId = typeof userId === "string" ? userId.replace(/}/g, "") : "";
+
+  const currentUser = useAppSelector((state: any) => state.User.userData);
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
 
   const [form, setForm] = useState<{
     title: string;
@@ -90,25 +96,32 @@ export default function ProjectsPage() {
     image: null,
   });
 
-  const [previewUrl, setPreviewUrl] = useState("");
-
-  const fetchProjects = async () => {
-    try {
-      const { data } = await axios.get("/api/project");
-      setProjects(data?.projects || []);
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Failed to load projects");
-    }
-  };
+  const isOwn =
+    !!currentUser &&
+    !!cleanUserId &&
+    String(currentUser._id) === cleanUserId;
 
   useEffect(() => {
-    if (user) {
-      if (Array.isArray(user.projects)) {
-        setProjects(user.projects);
-      }
-      fetchProjects();
+    if (!cleanUserId) {
+      setError("No user ID provided");
+      setLoading(false);
+      return;
     }
-  }, [user]);
+
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        const { data } = await axios.get(`/api/user/${cleanUserId}`);
+        setProjects(data?.user?.projects || []);
+      } catch (err: any) {
+        setError(err?.response?.data?.message || "Failed to load projects");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, [cleanUserId]);
 
   useEffect(() => {
     return () => {
@@ -116,9 +129,7 @@ export default function ProjectsPage() {
     };
   }, [previewUrl]);
 
-  const sortedProjects = useMemo(() => {
-    return [...projects].reverse();
-  }, [projects]);
+  const sortedProjects = useMemo(() => [...projects].reverse(), [projects]);
 
   const handleInput = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -160,6 +171,11 @@ export default function ProjectsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!cleanUserId) {
+      toast.error("Invalid user id");
+      return;
+    }
+
     if (!form.title.trim()) {
       toast.error("Project title is required");
       return;
@@ -181,27 +197,33 @@ export default function ProjectsPage() {
         formData.append("file", form.image);
       }
 
-      const { data } = await axios.post("/api/user/project", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const { data } = await axios.post(
+        `/api/user/${cleanUserId}/projects`,
+        formData
+      );
 
       toast.success(data?.message || "Project added successfully!");
       setShowModal(false);
       resetForm();
-      await fetchProjects();
+
+      const refetch = await axios.get(`/api/user/${cleanUserId}`);
+      setProjects(refetch.data?.user?.projects || []);
     } catch (error: any) {
-      console.error(error?.response?.data?.message || "Failed to create project");
+      toast.error(error?.response?.data?.message || "Failed to create project");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (projectId: string) => {
+    if (!cleanUserId) return;
+
     try {
       setDeleteLoadingId(projectId);
-      const { data } = await axios.delete(`/api/project/${projectId}`);
+      const { data } = await axios.delete(
+        `/api/user/${cleanUserId}/projects/${projectId}`
+      );
+
       toast.success(data?.message || "Project deleted successfully");
       setProjects((prev) => prev.filter((project) => project._id !== projectId));
     } catch (error: any) {
@@ -211,10 +233,18 @@ export default function ProjectsPage() {
     }
   };
 
-  if (!user) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFB]">
-        <div className="text-[#64748B]">Loading profile...</div>
+        <div className="text-[#64748B]">Loading projects...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFB]">
+        <div className="text-red-500">{error}</div>
       </div>
     );
   }
@@ -231,7 +261,9 @@ export default function ProjectsPage() {
             Projects Portfolio
           </h1>
           <p className="mt-1 text-sm text-[#64748B]">
-            Showcase of your development work and collaborations
+            {isOwn
+              ? "Showcase of your development work and collaborations"
+              : "Development projects"}
           </p>
         </div>
 
@@ -239,7 +271,7 @@ export default function ProjectsPage() {
           {sortedProjects.length === 0 ? (
             <div className="rounded-2xl border border-[#E8EDF2] bg-white py-12 text-center">
               <p className="text-[#64748B]">
-                No projects yet. Add your first project!
+                {isOwn ? "No projects yet. Add your first project!" : "No projects listed."}
               </p>
             </div>
           ) : (
@@ -297,16 +329,16 @@ export default function ProjectsPage() {
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         )}
-                        <button
-                          onClick={() => project._id && handleDelete(project._id)}
-                          disabled={
-                            !project._id || deleteLoadingId === project._id
-                          }
-                          className="rounded-lg border border-[#E8EDF2] p-2 text-[#64748B] transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                          aria-label="Delete project"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isOwn && project._id && (
+                          <button
+                            onClick={() => handleDelete(project._id!)}
+                            disabled={deleteLoadingId === project._id}
+                            className="rounded-lg border border-[#E8EDF2] p-2 text-[#64748B] transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                            aria-label="Delete project"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -360,27 +392,32 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        <div className="flex justify-center">
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#D8E1E8] px-8 py-6 transition hover:border-[#B9C4CF] hover:bg-[#F2F5F8]"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8EDF2] text-[#64748B]">
-              <Plus className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-[#0D1B2A]">
-                Add New Project
-              </h3>
-              <p className="text-xs text-[#64748B]">Showcase your work</p>
-            </div>
-          </button>
-        </div>
+        {isOwn && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#D8E1E8] px-8 py-6 transition hover:border-[#B9C4CF] hover:bg-[#F2F5F8]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8EDF2] text-[#64748B]">
+                <Plus className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-[#0D1B2A]">
+                  Add New Project
+                </h3>
+                <p className="text-xs text-[#64748B]">Showcase your work</p>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
 
       {showModal && (
         <Modal title="Add New Project" onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 gap-4 md:grid-cols-2"
+          >
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
                 Project Title *

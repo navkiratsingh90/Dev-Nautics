@@ -1,17 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
 import { Briefcase, Calendar, MapPin, Plus, X, Award } from "lucide-react";
 import axios from "axios";
-// import { IWorkExperience } from "@/models/user-model";
 
 // ─── Types ──────────────────────────────────────────────────────────────
-
-
 export interface IWorkExperience {
-  _id : string
+  _id: string;
   companyName: string;
   duration: string;
   role?: string;
@@ -21,8 +19,13 @@ export interface IWorkExperience {
 
 // ─── Main Component ────────────────────────────────────────────────────
 export default function WorkExperiencePage() {
-  const user = useAppSelector((state: any) => state.User.userData);
+  const params = useParams();
+  const userId = params?.id as string; // from /profile/[id]/work-experience
+
+  const currentUser = useAppSelector((state: any) => state.User.userData);
   const [workExperiences, setWorkExperiences] = useState<IWorkExperience[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     companyName: "",
@@ -32,22 +35,32 @@ export default function WorkExperiencePage() {
     description: "",
   });
 
-  // Initialize work experience list from Redux user data
+  // Determine if the viewed profile belongs to the logged‑in user
+  const isOwn = currentUser && currentUser._id === userId;
+
+  // ── Fetch work experiences from API ──────────────────────────────────
   useEffect(() => {
-    if (user?.workExperience) {
-      setWorkExperiences(user.workExperience);
+    if (!userId) {
+      setError("No user ID provided");
+      setLoading(false);
+      return;
     }
-  }, [user]);
 
-  // Show loading while user data is not yet loaded
-  if (!user) {
-    return (
-      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading profile...</div>
-      </div>
-    );
-  }
+    const fetchWorkExperiences = async () => {
+      try {
+        const { data } = await axios.get(`/api/user/${userId}`);
+        setWorkExperiences(data.user.workExperience || []);
+      } catch (err: any) {
+        setError(err.response?.data?.message || "Failed to load work experiences");
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchWorkExperiences();
+  }, [userId]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -55,14 +68,12 @@ export default function WorkExperiencePage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-  
+
     try {
       const response = await axios.post(
-        "/api/user/work-experience",
+        `/api/user/${userId}/work-experience`,
         {
           companyName: formData.companyName,
           duration: formData.duration,
@@ -71,10 +82,13 @@ export default function WorkExperiencePage() {
           location: formData.location,
         }
       );
-  
-      toast.success(response.data.message);
-      console.log(response.data);
-      
+
+      toast.success(response.data.message || "Work experience added");
+
+      // Refresh the list
+      const refetch = await axios.get(`/api/user/${userId}/work-experience`);
+      setWorkExperiences(refetch.data.data || []);
+
       setFormData({
         companyName: "",
         duration: "",
@@ -82,20 +96,39 @@ export default function WorkExperiencePage() {
         description: "",
         location: "",
       });
-  
       setShowForm(false);
     } catch (error: any) {
-      toast.error(
-        error.response?.data?.message ||
-          "Failed to add work experience"
-      );
+      toast.error(error.response?.data?.message || "Failed to add work experience");
     }
   };
 
-  // Simple modal component
+  // ── Loading / error states ──────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading work experience...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
+
+  // ── Simple modal component ───────────────────────────────────────────
   const Modal = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {children}
       </div>
     </div>
@@ -112,72 +145,88 @@ export default function WorkExperiencePage() {
             <Briefcase className="w-3.5 h-3.5" /> Professional journey
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Work Experience</h1>
-          <p className="text-sm text-gray-500 mt-1">My career path, roles, and achievements</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {isOwn
+              ? "My career path, roles, and achievements"
+              : "Professional experience"}
+          </p>
         </div>
 
-        {/* Timeline with simple vertical line */}
+        {/* Timeline with vertical line */}
         <div className="relative">
-          {/* Vertical line */}
           <div className="absolute left-5 top-0 bottom-0 w-px bg-gray-200" />
 
-          {/* Experience items */}
-          <div className="space-y-8">
-            {workExperiences.map((exp, idx) => {
-              const color = dotColors[idx % dotColors.length];
-              return (
-                <div key={exp._id} className="flex gap-4">
-                  {/* Timeline dot */}
-                  <div className="relative z-10">
-                    <div
-                      className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-bold shadow-sm`}
-                    >
-                      { exp.companyName.charAt(0).toUpperCase()}
-                    </div>
-                  </div>
-
-                  {/* Experience card */}
-                  <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-5">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900">{exp.companyName}</h3>
-                        <p className="text-sm text-green-600 font-medium">{exp.role}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Calendar className="w-3 h-3" />
-                          <span>{exp.duration}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                          <MapPin className="w-3 h-3" />
-                          <span>{exp.location}</span>
-                        </div>
+          {workExperiences.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              No work experiences yet.
+              {isOwn && " Click the button below to add your first one."}
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {workExperiences.map((exp, idx) => {
+                const color = dotColors[idx % dotColors.length];
+                return (
+                  <div key={exp._id} className="flex gap-4">
+                    <div className="relative z-10">
+                      <div
+                        className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-bold shadow-sm`}
+                      >
+                        {exp.companyName.charAt(0).toUpperCase()}
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 leading-relaxed mb-3">{exp.description}</p>
+                    <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-5">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {exp.companyName}
+                          </h3>
+                          <p className="text-sm text-green-600 font-medium">
+                            {exp.role}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <Calendar className="w-3 h-3" />
+                            <span>{exp.duration}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            <span>{exp.location}</span>
+                          </div>
+                        </div>
+                      </div>
 
+                      <p className="text-sm text-gray-600 leading-relaxed mb-3">
+                        {exp.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Add Experience Button (only if own profile) */}
+        {isOwn && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setShowForm(true)}
+              className="border-2 border-dashed border-gray-300 rounded-2xl px-8 py-6 flex flex-col items-center gap-3 hover:border-gray-400 hover:bg-gray-100 transition"
+            >
+              <div className="w-12 h-12 rounded-xl bg-gray-200 flex items-center justify-center text-gray-600">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Add Work Experience
+                </h3>
+                <p className="text-xs text-gray-500">Share your professional journey</p>
+              </div>
+            </button>
           </div>
-        </div>
-
-        {/* Add Experience Button */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => setShowForm(true)}
-            className="border-2 border-dashed border-gray-300 rounded-2xl px-8 py-6 flex flex-col items-center gap-3 hover:border-gray-400 hover:bg-gray-100 transition"
-          >
-            <div className="w-12 h-12 rounded-xl bg-gray-200 flex items-center justify-center text-gray-600">
-              <Plus className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-gray-900">Add Work Experience</h3>
-              <p className="text-xs text-gray-500">Share your professional journey</p>
-            </div>
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Add Experience Modal */}
@@ -259,7 +308,6 @@ export default function WorkExperiencePage() {
                 Cancel
               </button>
               <button
-
                 type="submit"
                 className="flex-1 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800"
               >

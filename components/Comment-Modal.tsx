@@ -48,7 +48,7 @@ const CommentModal: React.FC<CommentModalProps> = ({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [localComments, setLocalComments] = useState<Comment[]>(comments);
-
+  
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -110,7 +110,8 @@ const CommentModal: React.FC<CommentModalProps> = ({
       const { data } = await axios.delete(
         `/api/activity/${activityId}/comment/${commentId}`
       );
-
+      console.log(data);
+      
       if (data.success) {
         setLocalComments((prev) =>
           prev.filter((comment) => comment._id !== commentId)

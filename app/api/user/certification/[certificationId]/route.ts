@@ -3,7 +3,16 @@ import connectDb from "@/lib/db";
 import User from "@/models/user-model";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+interface Params {
+  params: Promise<{
+    certificationId: string;
+  }>;
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: Params
+) {
   try {
     await connectDb();
 
@@ -16,23 +25,6 @@ export async function POST(req: NextRequest) {
           message: "Unauthorized",
         },
         { status: 401 }
-      );
-    }
-
-    const {
-      schoolName,
-      degree,
-      duration,
-      description,
-    } = await req.json();
-
-    if (!schoolName || !degree || !duration) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "All required fields must be provided",
-        },
-        { status: 400 }
       );
     }
 
@@ -50,25 +42,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    user.education.push({
-      schoolName,
-      degree,
-      duration,
-      description,
-    });
+    const { certificationId } = await params;
+
+    user.certifications = user.certifications.filter(
+      (cert: any) =>
+        cert._id.toString() !== certificationId
+    );
 
     await user.save();
 
     return NextResponse.json(
       {
         success: true,
-        message: "Education added successfully",
-        education: user.education,
+        message: "Certification deleted successfully",
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("ADD EDUCATION ERROR:", error);
+    console.error("DELETE CERTIFICATION ERROR:", error);
 
     return NextResponse.json(
       {
@@ -78,21 +69,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  await connectDb();
-
-  const { id } = await params;
-
-  const user = await User.findById(id).select("education");
-
-  return NextResponse.json({
-    success: true,
-    education: user?.education || [],
-  });
 }

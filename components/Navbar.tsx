@@ -214,7 +214,7 @@ export default function Navbar5() {
                   className={darkMode ? "bg-gray-800" : "bg-gray-200"}
                 />
                 <DropdownMenuItem asChild>
-                  <Link href={`${userData._id}}`}>Profile</Link>
+                  <Link href={`${userData._id}`}>Profile</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings">Settings</Link>

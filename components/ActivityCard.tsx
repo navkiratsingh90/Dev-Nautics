@@ -1,5 +1,7 @@
 // "use client";
 
+import { Bookmark, MessageCircle, Tag, Trash2 } from "lucide-react";
+
 // import React, { useEffect, useState } from "react";
 // import { useSelector } from "react-redux";
 // import { Heart, Send } from "lucide-react";
@@ -404,12 +406,8 @@
 //   );
 // };
 
-// export default ActivityCard;
-import React from "react";
-import { Bookmark, Heart, MessageCircle, MoreHorizontal, Trash2, Tag } from "lucide-react";
-
 interface ActivityComment {
-  _id?: string;
+  _id: string;
   content: string;
   createdBy: {
     _id: string;
@@ -430,7 +428,8 @@ interface Activity {
     username: string;
   };
   createdAt: string;
-  isBookmarked?: boolean;
+  bookmark : string[]
+  updatedAt?: string;
 }
 
 function timeAgo(dateStr: string) {
@@ -448,6 +447,7 @@ function timeAgo(dateStr: string) {
 export default function ActivityCard({
   activity,
   currentUserId,
+  isBookmarked,
   onLike,
   onComment,
   onBookmark,
@@ -455,13 +455,13 @@ export default function ActivityCard({
 }: {
   activity: Activity;
   currentUserId: string;
+  isBookmarked: boolean;
   onLike: (id: string) => void;
   onComment: (id: string) => void;
   onBookmark: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   const isOwnPost = activity.createdBy._id === currentUserId;
-  const isBookmarked = !!activity.isBookmarked;
 
   return (
     <div className="bg-white border border-[#E8EDF2] rounded-2xl shadow-sm overflow-hidden">
@@ -481,9 +481,7 @@ export default function ActivityCard({
                   {timeAgo(activity.createdAt)}
                 </span>
               </div>
-              <p className="m-0 text-[12px] text-[#64748B]">
-                Shared an activity
-              </p>
+              <p className="m-0 text-[12px] text-[#64748B]">Shared an activity</p>
             </div>
           </div>
 
@@ -497,7 +495,16 @@ export default function ActivityCard({
               }`}
               aria-label="Bookmark post"
             >
-              <Bookmark className="w-4 h-4" fill={isBookmarked ? "currentColor" : "none"} />
+              <Bookmark
+  className="w-4 h-4 "
+  fill={
+    activity.bookmark?.some(
+      (b: string) => b.toString() === currentUserId
+    )
+      ? "currentColor"
+      : "none"
+  }
+/>
             </button>
 
             {isOwnPost && (
@@ -509,10 +516,6 @@ export default function ActivityCard({
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
-
-            <button className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB] transition">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
@@ -546,19 +549,15 @@ export default function ActivityCard({
 
         <div className="mt-5 pt-4 border-t border-[#E8EDF2] flex items-center justify-between gap-3">
           <div className="flex items-center gap-4 text-xs text-[#64748B]">
-            <span>{activity.likes} likes</span>
-            <span>{activity.comments?.length || 0} comments</span>
+            <button
+              onClick={() => onComment(activity._id)}
+              className="hover:text-[#0EA472] transition"
+            >
+              {activity.comments?.length || 0} comments
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onLike(activity._id)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
-            >
-              <Heart className="w-4 h-4 text-[#0EA472]" />
-              Like
-            </button>
-
             <button
               onClick={() => onComment(activity._id)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E8EDF2] text-xs font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition"
