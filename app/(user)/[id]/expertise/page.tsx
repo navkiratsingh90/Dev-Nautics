@@ -228,15 +228,16 @@ export default function SkillsCertificationsPage() {
   ) => {
     const normalizedSkill = skill.trim();
     if (!normalizedSkill) return;
-
+      // console.log(category, normalizedSkill);
+      
     try {
       const { data } =
         action === "add"
-          ? await axios.post(`/api/user/${userId}/skills`, {
+          ? await axios.post(`/api/user/skills`, {
               category,
               skill: normalizedSkill,
             })
-          : await axios.delete(`/api/user/${userId}/skills`, {
+          : await axios.delete(`/api/user/skills`, {
               data: { category, skill: normalizedSkill },
             });
 
@@ -244,7 +245,7 @@ export default function SkillsCertificationsPage() {
       if (data.skills) updateSkillsState(data.skills);
       return true;
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to update skills");
+      toast.error(error.response?.data?.message);
       return false;
     }
   };

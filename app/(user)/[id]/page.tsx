@@ -30,20 +30,28 @@ import {
   Hash,
   GitBranch,
 } from "lucide-react";
-import { IUser, ISkills } from "@/types/User";
+import { IProject } from "@/models/user-model";
 
-const SKILL_CATEGORIES: {
-  key: keyof ISkills;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { key: "frontend", label: "Frontend", icon: <Code2 className="w-3.5 h-3.5" /> },
-  { key: "backend", label: "Backend", icon: <Layers className="w-3.5 h-3.5" /> },
-  { key: "frameworks", label: "Frameworks", icon: <GitBranch className="w-3.5 h-3.5" /> },
-  { key: "libraries", label: "Libraries", icon: <BookOpen className="w-3.5 h-3.5" /> },
-  { key: "tools", label: "Tools", icon: <Hash className="w-3.5 h-3.5" /> },
-  { key: "languages", label: "Languages", icon: <Code2 className="w-3.5 h-3.5" /> },
-];
+ interface IUser {
+  _id : string,
+  username: string;
+  email: string;
+  password: string;
+
+  about?: string;
+  position : string,
+  portfolio : string,
+  projects : IProject[]
+  totalPendingRequests?: string[];
+  connectedUsers?: string[];
+  totalPoints?: number;
+
+  isVerified: boolean;
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 
 function safeArray<T>(arr?: T[] | null) {
   return arr ?? [];
@@ -56,23 +64,17 @@ function EditModal({ user, onClose }: { user: IUser; onClose: () => void }) {
     about: user.about ?? "",
     portfolio: user.portfolio ?? "",
   });
-const handleSave = async () => {
-  try {
-    const response = await axios.put(
-      "/api/user/profile",
-      form
-    );
-    console.log(response);
-    
-    toast.success(response.data.message);
-    onClose()
-  } catch (error: any) {
-    toast.error(
-      error.response?.data?.message ||
-      "Failed to update profile"
-    );
-  }
-};
+
+  const handleSave = async () => {
+    try {
+      const response = await axios.put("/api/user/profile", form);
+      toast.success(response.data.message);
+      onClose();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update profile");
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
@@ -95,7 +97,7 @@ const handleSave = async () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">position</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Position</label>
             <input
               className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-green-500"
               value={form.position}
@@ -135,12 +137,11 @@ const handleSave = async () => {
   );
 }
 
-
 export default function UserProfilePage() {
   const params = useParams();
   const userId = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
-  const currentUser = useAppSelector((state: any) => state.User.userData) as IUser | null;
+  const currentUser = useAppSelector((state: any) => state.User.userData) as IUser;
   const [profileUser, setProfileUser] = useState<IUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -190,9 +191,15 @@ export default function UserProfilePage() {
   const onConnect = async () => {
     try {
       setConnecting(true);
-      await new Promise((r) => setTimeout(r, 900));
+  
+      const { data } = await axios.post(
+        `/api/user/${userId}/connection-request`
+      );
+  
+      toast.success(data.message);
       setReqSent(true);
-      toast.success("Connection request sent");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to send request");
     } finally {
       setConnecting(false);
     }
@@ -219,6 +226,7 @@ export default function UserProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8 font-sans sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
+        {/* Hero Card */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="h-32 bg-green-600 md:h-40" />
 
@@ -243,21 +251,19 @@ export default function UserProfilePage() {
                 <div className="flex gap-2">
                   <button
                     onClick={onConnect}
-                    disabled={connected || reqSent || connecting}
+                    disabled={profileUser.connectedUsers?.includes(currentUser?._id) || profileUser.totalPendingRequests?.includes(currentUser?._id)}
                     className={`flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold ${
-                      connected || reqSent
+                      profileUser.connectedUsers?.includes(currentUser?._id) || profileUser.totalPendingRequests?.includes(currentUser?._id)
                         ? "cursor-default bg-gray-100 text-gray-500"
                         : "bg-gray-900 text-white hover:bg-gray-800"
                     }`}
                   >
-                    {connecting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : connected ? (
+                    { profileUser.connectedUsers?.includes(currentUser?._id) ? (
                       <CheckCircle className="w-4 h-4" />
                     ) : (
                       <UserPlus className="w-4 h-4" />
                     )}
-                    {connected ? "Connected" : reqSent ? "Sent" : "Connect"}
+                    {profileUser.connectedUsers?.includes(currentUser?._id) ? "Connected" : profileUser.totalPendingRequests?.includes(currentUser?._id) ? "Sent" : "Connect"}
                   </button>
                   <button className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
                     <MessageCircle className="w-4 h-4" />
@@ -267,9 +273,25 @@ export default function UserProfilePage() {
               )}
             </div>
 
+            {/* ========== USER INFO: name, position, portfolio, joined ========== */}
             <div className="mt-4">
               <h1 className="text-2xl font-bold text-gray-900">{user.username}</h1>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+              {user.position && (
+                <p className="mt-0.5 text-sm font-medium text-green-600">{user.position}</p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                {user.portfolio && (
+                  <a
+                    href={`https://${user.portfolio}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-green-600 hover:underline"
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    {user.portfolio}
+                    <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                  </a>
+                )}
                 <span className="text-gray-500">
                   Joined{" "}
                   {new Date(user.createdAt).toLocaleDateString("en-US", {
@@ -281,13 +303,12 @@ export default function UserProfilePage() {
             </div>
 
             {user.about && (
-              <p className="mt-3 text-sm leading-relaxed text-gray-600">
-                {user.about}
-              </p>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">{user.about}</p>
             )}
           </div>
         </div>
 
+        {/* Stats Row */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[
             {
@@ -332,6 +353,7 @@ export default function UserProfilePage() {
           ))}
         </div>
 
+        {/* Contact Card */}
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="flex items-center gap-2 border-b border-gray-200 px-6 py-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-500 text-white">
@@ -357,7 +379,6 @@ export default function UserProfilePage() {
       </div>
 
       {showEdit && <EditModal user={user} onClose={() => setShowEdit(false)} />}
-
     </div>
   );
 }

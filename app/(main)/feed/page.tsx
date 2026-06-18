@@ -6,6 +6,8 @@ import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
 import { Sparkles, Send, Image as ImageIcon, Hash } from "lucide-react";
 import ActivityCard from "@/components/ActivityCard";
+import axios from "axios";
+import CommentModal from "@/components/Comment-Modal";
 
 // ─── Types (matching Mongoose schema) ────────────────────────────────────────
 interface CommentUser {
@@ -33,53 +35,10 @@ interface Feed {
   updatedAt?: string;
 }
 
+
 // ─── API service functions (replace with actual imports) ─────────────────────
 // import { getFeeds, createFeed, likeFeed, commentFeed, bookmarkFeed, deleteFeed } from "@/services/feedApis";
 
-// Mock API functions – replace these with real API calls
-async function fetchFeeds(): Promise<Feed[]> {
-  // GET /api/feeds
-  return [
-    {
-      _id: "1",
-      description: "Just shipped a real‑time collaboration feature using WebSockets + Zustand. Latency under 50ms! 🚀",
-      file: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600&h=300&fit=crop",
-      tags: ["react", "websockets"],
-      createdBy: { _id: "u1", username: "alexj" },
-      likes: 3,
-      bookmarks: [],
-      comments: [
-        { _id: "c1", content: "Awesome work!", createdBy: { _id: "u2", username: "sarahc" }, createdAt: new Date().toISOString() },
-      ],
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      _id: "2",
-      description: "Writing a deep dive on useMemo vs useCallback – most devs over‑memoize. Blog post dropping this week.",
-      tags: ["react", "performance"],
-      createdBy: { _id: "u2", username: "sarahc" },
-      likes: 5,
-      bookmarks: [],
-      comments: [],
-      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-}
-
-async function createFeed(description: string, file?: string, tags?: string[]): Promise<Feed> {
-  // POST /api/feeds
-  return {
-    _id: Date.now().toString(),
-    description,
-    file,
-    tags: tags || [],
-    createdBy: { _id: "current", username: "you" },
-    likes: 0,
-    bookmarks: [],
-    comments: [],
-    createdAt: new Date().toISOString(),
-  };
-}
 
 async function likeFeed(feedId: string): Promise<{ likes: number }> {
   // POST /api/feeds/:id/like
@@ -101,131 +60,38 @@ async function deleteFeed(feedId: string): Promise<void> {
 }
 
 // ─── Create Post Box ──────────────────────────────────────────────────────────
-function CreatePostBox({ onPost }: { onPost: (text: string, file?: string, tags?: string[]) => void }) {
-  const [text, setText] = useState("");
-  const [file, setFile] = useState("");
-  const [tags, setTags] = useState("");
-  const [focused, setFocused] = useState(false);
-
-  function handlePost() {
-    if (!text.trim()) return;
-    const tagArray = tags.split(",").map(t => t.trim()).filter(Boolean);
-    onPost(text.trim(), file || undefined, tagArray.length > 0 ? tagArray : undefined);
-    setText("");
-    setFile("");
-    setTags("");
-    setFocused(false);
-    toast.success("Post shared! 🎉");
-  }
-
-  return (
-    <div className={`bg-white border border-[#E8EDF2] rounded-2xl p-4 transition-all ${focused ? "shadow-md border-[#0EA472]/30" : ""}`}>
-      <div className="flex gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center text-gray-700 font-bold text-sm shrink-0">ME</div>
-        <div className="flex-1">
-          <textarea
-            rows={focused ? 3 : 1}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onFocus={() => setFocused(true)}
-            placeholder="Share something with the dev community…"
-            className="w-full text-sm outline-none resize-none transition-all bg-transparent text-[#0D1B2A] placeholder:text-[#94A3B8]"
-          />
-          {focused && (
-            <div className="space-y-3 mt-3 pt-3 border-t border-[#E8EDF2]">
-              <input
-                type="text"
-                value={file}
-                onChange={e => setFile(e.target.value)}
-                placeholder="Image URL (optional)"
-                className="w-full px-3 py-2 border border-[#E8EDF2] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#0EA472]/25"
-              />
-              <input
-                type="text"
-                value={tags}
-                onChange={e => setTags(e.target.value)}
-                placeholder="Tags (comma separated, e.g., React, Next.js)"
-                className="w-full px-3 py-2 border border-[#E8EDF2] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#0EA472]/25"
-              />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <button className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F8FAFB] transition"><ImageIcon className="w-4 h-4" /></button>
-                  <button className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F8FAFB] transition"><Hash className="w-4 h-4" /></button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { setFocused(false); setText(""); setFile(""); setTags(""); }} className="px-3 py-1.5 rounded-xl text-xs font-medium border border-[#E8EDF2] text-[#64748B] hover:bg-[#F8FAFB]">Cancel</button>
-                  <button onClick={handlePost} disabled={!text.trim()} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition ${text.trim() ? "bg-[#0D1B2A] text-white hover:bg-[#1E3A5F] shadow-sm" : "bg-[#F8FAFB] text-[#94A3B8] cursor-not-allowed"}`}>
-                    <Send className="w-3 h-3" /> Post
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main Feed Page ───────────────────────────────────────────────────────────
 export default function FeedPage() {
   const user = useAppSelector((state: any) => state.User.userData);
-  const currentUserId = user?._id || "";
-
+  const currentUserId = user?._id || "";  
+  const [selectedFeed, setSelectedFeed] = useState<Feed>()
   const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [showComments, setShowComments] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "following" | "bookmarks">("all");
 
   // Load feeds from API
   useEffect(() => {
-    fetchFeeds()
-      .then(data => {
-        setFeeds(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        toast.error("Failed to load feed");
-        setLoading(false);
-      });
-  }, []);
-
-  // ── Handlers (with optimistic updates) ──
-  const handleLike = async (feedId: string) => {
-    setFeeds(prev =>
-      prev.map(f => {
-        if (f._id !== feedId) return f;
-        const alreadyLiked = f.bookmarks.includes(currentUserId);
-        return {
-          ...f,
-          likes: alreadyLiked ? f.likes - 1 : f.likes + 1,
-          bookmarks: alreadyLiked
-            ? f.bookmarks.filter(id => id !== currentUserId)
-            : [...f.bookmarks, currentUserId],
-        };
-      })
-    );
-    try {
-      await likeFeed(feedId);
-    } catch {
-      // Revert optimistic update
-      setFeeds(prev =>
-        prev.map(f => {
-          if (f._id !== feedId) return f;
-          const wasLiked = f.bookmarks.includes(currentUserId);
-          return {
-            ...f,
-            likes: wasLiked ? f.likes - 1 : f.likes + 1,
-            bookmarks: wasLiked
-              ? [...f.bookmarks, currentUserId]
-              : f.bookmarks.filter(id => id !== currentUserId),
-          };
-        })
-      );
-      toast.error("Failed to like post");
+    const fetchFeeds = async () => {
+      try {
+          const {data} = await axios.get('/api/activity')
+          console.log(data);
+          setFeeds(data.activities)
+          
+      } catch (error) {
+        console.error(error);
+        
+      }
     }
+    fetchFeeds()
+  }, []);
+  const handleOpenComments = (activityId: string) => {
+    const activity = feeds.find((item) => item._id === activityId);
+    if (!activity) return;
+    setSelectedFeed(activity);
+    setShowComments(true);
   };
-
   const handleComment = async (feedId: string) => {
     const content = window.prompt("Write a comment:");
     if (!content) return;
@@ -261,54 +127,40 @@ export default function FeedPage() {
     }
   };
 
-  const handleBookmark = async (feedId: string) => {
-    setFeeds(prev =>
-      prev.map(f => {
-        if (f._id !== feedId) return f;
-        const isBookmarked = f.bookmarks.includes(currentUserId);
-        return {
-          ...f,
-          bookmarks: isBookmarked
-            ? f.bookmarks.filter(id => id !== currentUserId)
-            : [...f.bookmarks, currentUserId],
-        };
-      })
-    );
+  const handleBookmark = async (id: string) => {
     try {
-      await bookmarkFeed(feedId);
-    } catch {
-      setFeeds(prev =>
-        prev.map(f => {
-          if (f._id !== feedId) return f;
-          const wasBookmarked = f.bookmarks.includes(currentUserId);
-          return {
-            ...f,
-            bookmarks: wasBookmarked
-              ? [...f.bookmarks, currentUserId]
-              : f.bookmarks.filter(id => id !== currentUserId),
-          };
-        })
+      await axios.post(`/api/activity/${id}/bookmark`);
+      // Toggle local bookmark state
+      // setFeeds((prev) => ([...prev , prev.]));
+      const updatedFeed = feeds.map((curr) =>
+        curr._id === id
+          ? {
+              ...curr,
+              bookmarks: curr.bookmarks.includes(currentUserId)
+                ? curr.bookmarks.filter(
+                    (userId) => userId !== currentUserId
+                  )
+                : [...curr.bookmarks, currentUserId],
+            }
+          : curr
       );
-      toast.error("Failed to bookmark");
+      
+      setFeeds(updatedFeed);
+      toast.success("Bookmark toggled");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to bookmark");
     }
   };
 
-  const handleDelete = async (feedId: string) => {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
-    const originalFeeds = feeds;
-    setFeeds(prev => prev.filter(f => f._id !== feedId));
+  const handleDelete = async (id: string) => {
+    // if (!window.confirm("Delete this activity?")) return;
     try {
-      await deleteFeed(feedId);
-      toast.success("Post deleted");
-    } catch {
-      setFeeds(originalFeeds);
-      toast.error("Failed to delete post");
+      await axios.delete(`/api/activity/${id}`);
+      setFeeds((prev) => prev.filter((activity) => activity._id !== id));
+      toast.success("Activity deleted");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to delete activity");
     }
-  };
-
-  const handleNewPost = async (text: string, file?: string, tags?: string[]) => {
-    const newFeed = await createFeed(text, file, tags);
-    setFeeds(prev => [newFeed, ...prev]);
   };
 
   // Filter feeds
@@ -345,26 +197,7 @@ export default function FeedPage() {
       {/* Main feed column (centered) */}
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="space-y-5">
-          <CreatePostBox onPost={handleNewPost} />
-
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1 p-1 bg-[#F8FAFB] border border-[#E8EDF2] rounded-xl w-fit">
-            {(["all", "following", "bookmarks"] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveFilter(tab)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
-                  activeFilter === tab
-                    ? "bg-[#0D1B2A] text-white shadow-sm"
-                    : "text-[#64748B] hover:text-[#0D1B2A]"
-                }`}
-              >
-                {tab === "bookmarks"
-                  ? `Saved${feeds.filter(f => f.bookmarks.includes(currentUserId)).length > 0 ? ` (${feeds.filter(f => f.bookmarks.includes(currentUserId)).length})` : ""}`
-                  : tab}
-              </button>
-            ))}
-          </div>
+          {/* <CreatePostBox onPost={handleNewPost} /> */}
 
           {filteredFeeds.length === 0 ? (
             <div className="bg-white border border-[#E8EDF2] rounded-2xl p-12 text-center">
@@ -379,11 +212,10 @@ export default function FeedPage() {
               {filteredFeeds.map(feed => (
                 <ActivityCard
                   key={feed._id}
-                  activity={feed}
+                  activity={feed!}
                   currentUserId={currentUserId}
                   isBookmarked={feed.bookmarks.includes(currentUserId)}
-                  onLike={handleLike}
-                  onComment={handleComment}
+                  onComment={handleOpenComments}
                   onBookmark={handleBookmark}
                   onDelete={handleDelete}
                 />
@@ -392,6 +224,15 @@ export default function FeedPage() {
           )}
         </div>
       </div>
+      <CommentModal
+        isOpen={showComments}
+        onClose={() => setShowComments(false)}
+        activityId={selectedFeed?._id || ""}
+        comments={selectedFeed?.comments || []}
+        currentUserId={currentUserId}
+        darkMode={false}
+        // onAddComment={handleAddComment}
+      />
     </div>
   );
 }

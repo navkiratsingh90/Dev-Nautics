@@ -144,31 +144,6 @@ export default function ActivityPage() {
     }
   };
 
-  // ── Activity handlers ──────────────────────────────────────────────────────
-  const handleLike = async (id: string) => {
-    // Optimistic update
-    setActivities((prev) =>
-      prev.map((activity) =>
-        activity._id === id
-          ? { ...activity, likes: activity.likes + 1 }
-          : activity
-      )
-    );
-    try {
-      await axios.post(`/api/activity/${id}/like`);
-    } catch {
-      // Revert optimistic update
-      setActivities((prev) =>
-        prev.map((activity) =>
-          activity._id === id
-            ? { ...activity, likes: activity.likes - 1 }
-            : activity
-        )
-      );
-      toast.error("Failed to like");
-    }
-  };
-
   const handleBookmark = async (id: string) => {
     try {
       await axios.post(`/api/activity/${id}/bookmark`);
@@ -417,7 +392,6 @@ export default function ActivityPage() {
                 activity={activity}
                 currentUserId={currentUserId}
                 isBookmarked={bookmarks.has(activity._id)}
-                onLike={handleLike}
                 onComment={handleOpenComments}
                 onBookmark={handleBookmark}
                 onDelete={handleDelete}

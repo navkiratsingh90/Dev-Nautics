@@ -14,7 +14,6 @@ export interface IFeed extends Document {
 
   createdBy: Types.ObjectId;
 
-  likes: number;
   bookmarks: Types.ObjectId[];
 
   comments: IComment[];
@@ -65,12 +64,6 @@ const feedSchema = new Schema<IFeed>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-    },
-
-    // Store users who liked
-    likes: {
-      type : Number,
-      default : 0
     },
 
     // Store users who bookmarked

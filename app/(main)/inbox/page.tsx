@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAppSelector } from "@/redux/hooks";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   Check,
   Clock3,
@@ -15,14 +18,23 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// --- Types ---
+// --- Types (aligned with the actual API response) ---
 interface ConnectionRequest {
-  id: string;
+  _id: string;
   username: string;
+  email: string;
+  position: string;
   about: string;
-  skills: string[];
-  mutual: number;
-  sentAt: string;
+  skills: {
+    frontend: string[];
+    backend: string[];
+    tools: string[];
+    frameworks: string[];
+    libraries: string[];
+    languages: string[];
+  };
+  portfolio: string;
+  createdAt: string;
 }
 
 interface CommunityRequest {
@@ -39,34 +51,8 @@ interface CommunityRequest {
 
 type RequestTab = "connections" | "communities";
 
-const connectionRequests: ConnectionRequest[] = [
-  {
-    id: "1",
-    username: "Arjun Mehta",
-    about: "Full-stack developer building scalable products with React and Node.js.",
-    skills: ["React", "Node.js", "TypeScript"],
-    mutual: 12,
-    sentAt: "2026-06-14T18:20:00Z",
-  },
-  {
-    id: "2",
-    username: "Sarah Chen",
-    about: "Machine learning engineer interested in AI tools, product design, and collaboration.",
-    skills: ["Python", "ML", "FastAPI"],
-    mutual: 8,
-    sentAt: "2026-06-14T10:05:00Z",
-  },
-  {
-    id: "3",
-    username: "Priya Sharma",
-    about: "Frontend developer who loves clean UI, design systems, and hackathons.",
-    skills: ["Next.js", "Tailwind CSS", "UI/UX"],
-    mutual: 5,
-    sentAt: "2026-06-13T14:45:00Z",
-  },
-];
-
-const communityRequests: CommunityRequest[] = [
+// --- Mock community data (unchanged) ---
+const initialCommunityRequests: CommunityRequest[] = [
   {
     userId: "u1",
     username: "Marcus Johnson",
@@ -76,7 +62,7 @@ const communityRequests: CommunityRequest[] = [
     communityName: "Dev Builders Hub",
     communityIcon: "DB",
     members: 1240,
-    sentAt: "2026-06-14T16:10:00Z",
+    sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   },
   {
     userId: "u2",
@@ -87,10 +73,11 @@ const communityRequests: CommunityRequest[] = [
     communityName: "Frontend Circle",
     communityIcon: "FC",
     members: 860,
-    sentAt: "2026-06-13T08:30:00Z",
+    sentAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
   },
 ];
 
+// --- Helper: time ago ---
 const formatTimeAgo = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -105,6 +92,13 @@ const formatTimeAgo = (dateString: string) => {
   return `${diffDays}d ago`;
 };
 
+// --- Helper: flatten skills object to array ---
+const flattenSkills = (skills: ConnectionRequest["skills"]): string[] => {
+  if (!skills) return [];
+  return Object.values(skills).flat();
+};
+
+// --- Components ---
 const SkillChip = ({ skill }: { skill: string }) => (
   <span className="px-2.5 py-1 rounded-full bg-[#EDF7F3] text-[#0EA472] text-[11px] font-medium">
     {skill}
@@ -137,92 +131,134 @@ const SectionHeader = ({
   </div>
 );
 
-const RequestCard = ({
-  title,
-  subtitle,
-  about,
-  skills,
-  metaLeft,
-  metaRight,
-  badge,
-}: {
-  title: string;
-  subtitle: string;
-  about: string;
-  skills: string[];
-  metaLeft: string;
-  metaRight: string;
-  badge: React.ReactNode;
-}) => (
-  <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 md:p-6 hover:shadow-md transition-shadow">
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-4 min-w-0">
-        <div className="w-12 h-12 rounded-2xl bg-[#EDF7F3] flex items-center justify-center text-[#0EA472] font-bold border border-[#A7F3D0] shrink-0">
-          {badge}
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="m-0 text-[15px] font-semibold text-[#0D1B2A]">{title}</h3>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F8FAFB] text-[#64748B] border border-[#E8EDF2]">
-              {subtitle}
-            </span>
-          </div>
-          <p className="mt-2 mb-0 text-[13px] text-[#64748B] leading-relaxed">
-            {about}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-[11px] text-[#94A3B8] shrink-0">
-        <Clock3 className="w-3.5 h-3.5" />
-        {metaLeft}
-      </div>
+const EmptyState = ({ title, description }: { title: string; description: string }) => (
+  <div className="bg-white border border-[#E8EDF2] rounded-2xl p-10 text-center">
+    <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EDF7F3] border border-[#A7F3D0] text-[#0EA472] flex items-center justify-center mb-4">
+      <Search className="w-6 h-6" />
     </div>
-
-    <div className="mt-4 flex flex-wrap gap-2">
-      {skills.map((skill) => (
-        <SkillChip key={skill} skill={skill} />
-      ))}
-    </div>
-
-    <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-[#E8EDF2]">
-      <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
-        <ShieldCheck className="w-4 h-4 text-[#0EA472]" />
-        {metaRight}
-      </div>
-      <div className="flex items-center gap-2">
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-[13px] font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition">
-          <X className="w-4 h-4" />
-          Decline
-        </button>
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1B2A] text-white text-[13px] font-semibold hover:bg-[#1E3A5F] transition">
-          <Check className="w-4 h-4" />
-          Accept
-        </button>
-      </div>
-    </div>
+    <h3 className="m-0 text-[18px] font-bold text-[#0D1B2A]">{title}</h3>
+    <p className="m-0 mt-2 text-[13px] text-[#64748B]">{description}</p>
   </div>
 );
 
+// --- Main Component ---
 export default function InboxRequestsPage() {
+  const currentUser = useAppSelector((state: any) => state.User.userData);
   const [tab, setTab] = useState<RequestTab>("connections");
   const [search, setSearch] = useState("");
 
+  const [connectionReqs, setConnectionReqs] = useState<ConnectionRequest[]>([]);
+  const [communityReqs, setCommunityReqs] = useState<CommunityRequest[]>(initialCommunityRequests);
+
+  const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
+  const [fetching, setFetching] = useState(true);
+
+  // --- API: fetch pending requests ---
+  const getPendingRequests = async () => {
+    if (!currentUser?._id) {
+      setFetching(false);
+      return;
+    }
+    try {
+      setFetching(true);
+      const { data } = await axios.get(
+        `/api/user/${currentUser._id}/pending-requests`
+      );
+      if (data.success && data.pendingRequests) {
+        setConnectionReqs(data.pendingRequests);
+      } else {
+        setConnectionReqs([]);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load requests");
+      setConnectionReqs([]);
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    getPendingRequests();
+  }, [currentUser]);
+
+  // --- API handlers ---
+  const approveRequest = async (requesterId: string) => {
+    if (!currentUser?._id) {
+      toast.error("You must be logged in");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, [requesterId]: true }));
+    try {
+      const { data } = await axios.post(
+        `/api/user/${currentUser._id}/connection-request/approve`,
+        { requesterId }
+      );
+      toast.success(data.message || "Request approved");
+      setConnectionReqs((prev) => prev.filter((req) => req._id !== requesterId));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to approve request");
+    } finally {
+      setLoading((prev) => ({ ...prev, [requesterId]: false }));
+    }
+  };
+
+  const declineRequest = async (requesterId: string) => {
+    if (!currentUser?._id) {
+      toast.error("You must be logged in");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, [requesterId]: true }));
+    try {
+      const { data } = await axios.post(
+        `/api/user/${currentUser._id}/connection-request/decline`,
+        { requesterId }
+      );
+      toast.success(data.message || "Request declined");
+      setConnectionReqs((prev) => prev.filter((req) => req._id !== requesterId));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to decline request");
+    } finally {
+      setLoading((prev) => ({ ...prev, [requesterId]: false }));
+    }
+  };
+
+  // --- Community request handlers (mock) ---
+  const approveCommunity = async (userId: string, communityId: string) => {
+    toast.success("Community request approved (mock)");
+    setCommunityReqs((prev) => prev.filter((req) => req.userId !== userId || req.communityId !== communityId));
+  };
+
+  const declineCommunity = async (userId: string, communityId: string) => {
+    toast.success("Community request declined (mock)");
+    setCommunityReqs((prev) => prev.filter((req) => req.userId !== userId || req.communityId !== communityId));
+  };
+
+  // --- Search filters ---
   const filteredConnections = useMemo(() => {
-    return connectionRequests.filter((req) => {
-      const haystack = `${req.username} ${req.about} ${req.skills.join(" ")}`.toLowerCase();
+    return connectionReqs.filter((req) => {
+      const allSkills = flattenSkills(req.skills);
+      const haystack = `${req.username} ${req.about} ${allSkills.join(" ")}`.toLowerCase();
       return haystack.includes(search.toLowerCase());
     });
-  }, [search]);
+  }, [search, connectionReqs]);
 
   const filteredCommunities = useMemo(() => {
-    return communityRequests.filter((req) => {
+    return communityReqs.filter((req) => {
       const haystack = `${req.username} ${req.about} ${req.skills.join(" ")} ${req.communityName}`.toLowerCase();
       return haystack.includes(search.toLowerCase());
     });
-  }, [search]);
+  }, [search, communityReqs]);
 
-  const totalRequests = connectionRequests.length + communityRequests.length;
+  const totalRequests = connectionReqs.length + communityReqs.length;
+
+  // --- Render ---
+  if (fetching) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFB] flex items-center justify-center">
+        <div className="text-[#64748B]">Loading requests...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFB] text-[#0D1B2A] font-['Inter',-apple-system,BlinkMacSystemFont,sans-serif]">
@@ -249,11 +285,11 @@ export default function InboxRequestsPage() {
               </div>
               <div className="rounded-2xl border border-[#E8EDF2] bg-[#F8FAFB] p-4">
                 <div className="text-[11px] text-[#94A3B8] mb-1">Connections</div>
-                <div className="text-[22px] font-bold">{connectionRequests.length}</div>
+                <div className="text-[22px] font-bold">{connectionReqs.length}</div>
               </div>
               <div className="rounded-2xl border border-[#E8EDF2] bg-[#F8FAFB] p-4">
                 <div className="text-[11px] text-[#94A3B8] mb-1">Communities</div>
-                <div className="text-[22px] font-bold">{communityRequests.length}</div>
+                <div className="text-[22px] font-bold">{communityReqs.length}</div>
               </div>
             </div>
           </div>
@@ -302,20 +338,79 @@ export default function InboxRequestsPage() {
 
               <div className="grid grid-cols-1 gap-4">
                 {filteredConnections.length > 0 ? (
-                  filteredConnections.map((req) => (
-                    <RequestCard
-                      key={req.id}
-                      title={req.username}
-                      subtitle={`@${req.username.toLowerCase().replace(/\s+/g, "")}`}
-                      about={req.about}
-                      skills={req.skills}
-                      metaLeft={formatTimeAgo(req.sentAt)}
-                      metaRight={`${req.mutual} mutual connection${req.mutual !== 1 ? "s" : ""}`}
-                      badge={req.username.slice(0, 2).toUpperCase()}
-                    />
-                  ))
+                  filteredConnections.map((req) => {
+                    const isPending = loading[req._id];
+                    const sentAt = req.createdAt || new Date().toISOString();
+                    const allSkills = flattenSkills(req.skills);
+                    return (
+                      <div
+                        key={req._id}
+                        className="bg-white border border-[#E8EDF2] rounded-2xl p-5 md:p-6 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-4 min-w-0">
+                            <div className="w-12 h-12 rounded-2xl bg-[#EDF7F3] flex items-center justify-center text-[#0EA472] font-bold border border-[#A7F3D0] shrink-0">
+                              {req.username.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="m-0 text-[15px] font-semibold text-[#0D1B2A]">{req.username}</h3>
+                                {req.position && (
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F8FAFB] text-[#64748B] border border-[#E8EDF2]">
+                                    {req.position}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-2 mb-0 text-[13px] text-[#64748B] leading-relaxed">
+                                {req.about}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-[#94A3B8] shrink-0">
+                            <Clock3 className="w-3.5 h-3.5" />
+                            {formatTimeAgo(sentAt)}
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {allSkills.slice(0, 6).map((skill) => (
+                            <SkillChip key={skill} skill={skill} />
+                          ))}
+                          {allSkills.length > 6 && (
+                            <span className="text-[11px] text-[#64748B]">+{allSkills.length - 6} more</span>
+                          )}
+                        </div>
+
+                        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-[#E8EDF2]">
+                          <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
+                            <ShieldCheck className="w-4 h-4 text-[#0EA472]" />
+                            Wants to connect
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => declineRequest(req._id)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-[13px] font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <X className="w-4 h-4" />
+                              {isPending ? "Processing..." : "Decline"}
+                            </button>
+                            <button
+                              onClick={() => approveRequest(req._id)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1B2A] text-white text-[13px] font-semibold hover:bg-[#1E3A5F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Check className="w-4 h-4" />
+                              {isPending ? "Processing..." : "Accept"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 ) : (
-                  <EmptyState title="No matching connection requests" description="Try a different search term or switch to communities." />
+                  <EmptyState title="No connection requests" description="Try a different search term or switch to communities." />
                 )}
               </div>
             </section>
@@ -329,101 +424,101 @@ export default function InboxRequestsPage() {
 
               <div className="grid grid-cols-1 gap-4">
                 {filteredCommunities.length > 0 ? (
-                  filteredCommunities.map((req) => (
-                    <div
-                      key={req.userId}
-                      className="bg-white border border-[#E8EDF2] rounded-2xl p-5 md:p-6 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 min-w-0">
-                          <div className="w-12 h-12 rounded-2xl bg-[#EDF7F3] flex items-center justify-center text-[#0EA472] font-bold border border-[#A7F3D0] shrink-0">
-                            {req.communityIcon}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="m-0 text-[15px] font-semibold text-[#0D1B2A]">
-                                {req.username}
-                              </h3>
-                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F8FAFB] text-[#64748B] border border-[#E8EDF2]">
-                                Wants to join
-                              </span>
+                  filteredCommunities.map((req) => {
+                    const key = `community-${req.userId}-${req.communityId}`;
+                    const isPending = loading[key];
+                    return (
+                      <div
+                        key={req.userId}
+                        className="bg-white border border-[#E8EDF2] rounded-2xl p-5 md:p-6 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-4 min-w-0">
+                            <div className="w-12 h-12 rounded-2xl bg-[#EDF7F3] flex items-center justify-center text-[#0EA472] font-bold border border-[#A7F3D0] shrink-0">
+                              {req.communityIcon}
                             </div>
-                            <p className="mt-2 mb-0 text-[13px] text-[#64748B] leading-relaxed">
-                              {req.about}
-                            </p>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="m-0 text-[15px] font-semibold text-[#0D1B2A]">
+                                  {req.username}
+                                </h3>
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F8FAFB] text-[#64748B] border border-[#E8EDF2]">
+                                  Wants to join
+                                </span>
+                              </div>
+                              <p className="mt-2 mb-0 text-[13px] text-[#64748B] leading-relaxed">
+                                {req.about}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-[#94A3B8] shrink-0">
+                            <Clock3 className="w-3.5 h-3.5" />
+                            {formatTimeAgo(req.sentAt)}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-[#94A3B8] shrink-0">
-                          <Clock3 className="w-3.5 h-3.5" />
-                          {formatTimeAgo(req.sentAt)}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {req.skills.map((skill) => (
+                            <SkillChip key={skill} skill={skill} />
+                          ))}
                         </div>
-                      </div>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {req.skills.map((skill) => (
-                          <SkillChip key={skill} skill={skill} />
-                        ))}
-                      </div>
-
-                      <div className="mt-5 rounded-2xl bg-[#F8FAFB] border border-[#E8EDF2] p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div>
-                            <p className="m-0 text-[13px] font-semibold text-[#0D1B2A]">
-                              {req.communityName}
-                            </p>
-                            <p className="m-0 mt-1 text-[12px] text-[#64748B]">
-                              {req.members.toLocaleString()} members • Community ID: {req.communityId}
-                            </p>
+                        <div className="mt-5 rounded-2xl bg-[#F8FAFB] border border-[#E8EDF2] p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                              <p className="m-0 text-[13px] font-semibold text-[#0D1B2A]">
+                                {req.communityName}
+                              </p>
+                              <p className="m-0 mt-1 text-[12px] text-[#64748B]">
+                                {req.members.toLocaleString()} members • Community ID: {req.communityId}
+                              </p>
+                            </div>
+                            <Link
+                              href={`/communities/${req.communityId}`}
+                              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0EA472] hover:opacity-80 transition"
+                            >
+                              View community
+                              <ChevronRight className="w-4 h-4" />
+                            </Link>
                           </div>
-                          <Link
-                            href={`/communities/${req.communityId}`}
-                            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0EA472] hover:opacity-80 transition"
-                          >
-                            View community
-                            <ChevronRight className="w-4 h-4" />
-                          </Link>
                         </div>
-                      </div>
 
-                      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-[#E8EDF2]">
-                        <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
-                          <ShieldCheck className="w-4 h-4 text-[#0EA472]" />
-                          Community member request
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-[13px] font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition">
-                            <MessageCircle className="w-4 h-4" />
-                            Message
-                          </button>
-                          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1B2A] text-white text-[13px] font-semibold hover:bg-[#1E3A5F] transition">
-                            <Check className="w-4 h-4" />
-                            Approve
-                          </button>
+                        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-[#E8EDF2]">
+                          <div className="flex items-center gap-2 text-[12px] text-[#64748B]">
+                            <ShieldCheck className="w-4 h-4 text-[#0EA472]" />
+                            Community member request
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => declineCommunity(req.userId, req.communityId)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-[13px] font-medium text-[#0D1B2A] hover:bg-[#F8FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <X className="w-4 h-4" />
+                              {isPending ? "Processing..." : "Decline"}
+                            </button>
+                            <button
+                              onClick={() => approveCommunity(req.userId, req.communityId)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1B2A] text-white text-[13px] font-semibold hover:bg-[#1E3A5F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Check className="w-4 h-4" />
+                              {isPending ? "Processing..." : "Approve"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <EmptyState title="No matching community requests" description="Try another search term or switch back to connections." />
+                  <EmptyState title="No community requests" description="Try another search term or switch back to connections." />
                 )}
               </div>
             </section>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function EmptyState({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="bg-white border border-[#E8EDF2] rounded-2xl p-10 text-center">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EDF7F3] border border-[#A7F3D0] text-[#0EA472] flex items-center justify-center mb-4">
-        <Search className="w-6 h-6" />
-      </div>
-      <h3 className="m-0 text-[18px] font-bold text-[#0D1B2A]">{title}</h3>
-      <p className="m-0 mt-2 text-[13px] text-[#64748B]">{description}</p>
     </div>
   );
 }

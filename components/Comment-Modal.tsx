@@ -225,7 +225,7 @@ const CommentModal: React.FC<CommentModalProps> = ({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <Link
-                          href={`/user/${comment.createdBy._id}`}
+                          href={`/${comment.createdBy._id}`}
                           className={`block text-sm font-semibold hover:underline ${
                             darkMode ? "text-white" : "text-[#0D1B2A]"
                           }`}

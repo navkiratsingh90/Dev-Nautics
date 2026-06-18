@@ -1,118 +1,84 @@
-// import { NextRequest, NextResponse } from "next/server";
-// import dbConnect from "@/lib/db";
-// import Activity from "@/models/Activity";
-// import mongoose from "mongoose";
-// import { getServerSession } from "next-auth";
-// import { authOptions } from "@/lib/auth";
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import Feed from "@/models/feed-model";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
-// const errorResponse = (message: string, status: number) =>
-//   NextResponse.json({ success: false, message }, { status });
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDb();
 
-// /* ================= GET ================= */
-// export async function GET(
-//   req: NextRequest,
-//   { params }: { params: { id: string } }
-// ) {
-//   try {
-//     if (!mongoose.Types.ObjectId.isValid(params.id)) {
-//       return errorResponse("Invalid ID", 400);
-//     }
+    const session = await auth();
 
-//     await dbConnect();
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
 
-//     const session = await getServerSession(authOptions);
-//     if (!session?.user) return errorResponse("Unauthorized", 401);
+    const { id } = await params;
 
-//     const activity = await Activity.findById(params.id)
-//       .populate("createdBy", "username email")
-//       .lean();
+    const user = await User.findOne({
+      email: session.user.email,
+    }).select("_id");
 
-//     if (!activity) return errorResponse("Not found", 404);
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      );
+    }
 
-//     return NextResponse.json({ success: true, data: activity });
-//   } catch (error) {
-//     console.error(error);
-//     return errorResponse("Server error", 500);
-//   }
-// }
+    const activity = await Feed.findById(id);
 
-// /* ================= DELETE ================= */
-// export async function DELETE(
-//   req: NextRequest,
-//   { params }: { params: { id: string } }
-// ) {
-//   try {
-//     if (!mongoose.Types.ObjectId.isValid(params.id)) {
-//       return errorResponse("Invalid ID", 400);
-//     }
+    if (!activity) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Activity not found",
+        },
+        { status: 404 }
+      );
+    }
 
-//     await dbConnect();
+    if (activity.createdBy.toString() !== user._id.toString()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You can only delete your own activities",
+        },
+        { status: 403 }
+      );
+    }
 
-//     const session = await getServerSession(authOptions);
-//     if (!session?.user) return errorResponse("Unauthorized", 401);
+    await Feed.findByIdAndDelete(id);
 
-//     const activity = await Activity.findById(params.id);
-//     if (!activity) return errorResponse("Not found", 404);
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Activity deleted successfully",
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("DELETE ACTIVITY ERROR:", error);
 
-//     const isCreator =
-//       activity.createdBy.toString() === session.user.id;
-//     const isAdmin = session.user.role === "admin";
-
-//     if (!isCreator && !isAdmin) {
-//       return errorResponse("Forbidden", 403);
-//     }
-
-//     await Activity.findByIdAndDelete(params.id);
-
-//     return NextResponse.json({
-//       success: true,
-//       message: "Deleted successfully",
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return errorResponse("Server error", 500);
-//   }
-// }
-
-// /* ================= PUT ================= */
-// export async function PUT(
-//   req: NextRequest,
-//   { params }: { params: { id: string } }
-// ) {
-//   try {
-//     if (!mongoose.Types.ObjectId.isValid(params.id)) {
-//       return errorResponse("Invalid ID", 400);
-//     }
-
-//     await dbConnect();
-
-//     const session = await getServerSession(authOptions);
-//     if (!session?.user) return errorResponse("Unauthorized", 401);
-
-//     const body = await req.json();
-
-//     const activity = await Activity.findById(params.id);
-//     if (!activity) return errorResponse("Not found", 404);
-
-//     if (activity.createdBy.toString() !== session.user.id) {
-//       return errorResponse("Forbidden", 403);
-//     }
-
-//     const updateData: any = {};
-//     if (body.title !== undefined) updateData.title = body.title;
-//     if (body.description !== undefined) updateData.description = body.description;
-//     if (body.type !== undefined) updateData.type = body.type;
-//     if (body.metadata !== undefined) updateData.metadata = body.metadata;
-
-//     const updated = await Activity.findByIdAndUpdate(
-//       params.id,
-//       updateData,
-//       { new: true, runValidators: true }
-//     ).populate("createdBy", "username email");
-
-//     return NextResponse.json({ success: true, data: updated });
-//   } catch (error) {
-//     console.error(error);
-//     return errorResponse("Server error", 500);
-//   }
-// }
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
+      { status: 500 }
+    );
+  }
+}

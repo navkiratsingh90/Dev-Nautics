@@ -19,16 +19,19 @@ export async function POST(req: NextRequest) {
     await connectDb();
 
     const session = await auth();
-
+    console.log(session);
+    
     if (!session?.user?.email) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
       );
     }
-
+    	console.log("here");
+      
     const { category, skill } = await req.json();
-
+    // console.log(category , skill);
+    
     if (!category || !skill?.trim()) {
       return NextResponse.json(
         { success: false, message: "Category and skill are required" },

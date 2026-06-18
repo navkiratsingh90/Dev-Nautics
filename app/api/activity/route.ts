@@ -27,7 +27,7 @@ export async function GET() {
       );
     }
 
-    const activities = await Feed.find({ createdBy: user._id })
+    const activities = await Feed.find()
       .populate("createdBy", "username")
       .populate("comments.createdBy", "username")
       .sort({ createdAt: -1 })
@@ -84,8 +84,6 @@ export async function POST(req: NextRequest) {
     const description = formData.get("description") as string;
     const file = formData.get("file") as File | null;
     const tags = formData.get("tags") as string;
-	console.log(description , file , tags);
-	
 	const tagsArray = tags
 	? tags.split(",").map(tag => tag.trim())
 	: [];

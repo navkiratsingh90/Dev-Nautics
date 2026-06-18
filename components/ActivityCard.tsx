@@ -428,7 +428,7 @@ interface Activity {
     username: string;
   };
   createdAt: string;
-  bookmark : string[]
+  bookmarks : string[]
   updatedAt?: string;
 }
 
@@ -448,7 +448,6 @@ export default function ActivityCard({
   activity,
   currentUserId,
   isBookmarked,
-  onLike,
   onComment,
   onBookmark,
   onDelete,
@@ -456,7 +455,6 @@ export default function ActivityCard({
   activity: Activity;
   currentUserId: string;
   isBookmarked: boolean;
-  onLike: (id: string) => void;
   onComment: (id: string) => void;
   onBookmark: (id: string) => void;
   onDelete: (id: string) => void;
@@ -498,7 +496,7 @@ export default function ActivityCard({
               <Bookmark
   className="w-4 h-4 "
   fill={
-    activity.bookmark?.some(
+    activity.bookmarks?.some(
       (b: string) => b.toString() === currentUserId
     )
       ? "currentColor"
