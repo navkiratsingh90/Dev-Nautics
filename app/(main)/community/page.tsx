@@ -1,56 +1,94 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
-import { Search, X, Users, MessageCircle, Plus } from "lucide-react";
+import { Search, X, Plus } from "lucide-react";
+import axios from "axios";
 
-// ─── Types ──────────────────────────────────────────────────────────
-interface Discussion {
+// ─── Types (aligned with Community model) ──────────────────────────
+interface Community {
   _id: string;
-  groupName: string;
+  communityName: string;
+  slug: string;
   totalMembers: number;
-  onlineMembers: number;
-  createdBy: { _id: string; name: string };
+  createdBy:
+    | string
+    | {
+        _id: string;
+        username: string;
+        email?: string;
+      };
+  joinedMembers: (string | { _id: string })[];
+  admins: (string | { _id: string })[];
+  pendingRequests: (string | { _id: string })[];
   file?: string;
   about?: string;
+  onlineMembers: number;
   topics: string[];
   createdAt: string;
+  updatedAt: string;
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────
-const MOCK_DISCUSSIONS: Discussion[] = [
-  { _id: "1", groupName: "React & Next.js Builders", totalMembers: 4821, onlineMembers: 312, createdBy: { _id: "u1", name: "Navkirat" }, file: "⚛️", about: "Deep dives into React patterns, server components, hydration quirks.", topics: ["React", "Next.js", "TypeScript"], createdAt: "2024-01-10T10:00:00Z" },
-  { _id: "2", groupName: "Systems & Rust Enthusiasts", totalMembers: 2130, onlineMembers: 98, createdBy: { _id: "u2", name: "Alex Kim" }, file: "🦀", about: "Low-level programming, memory safety, Rust ownership model.", topics: ["Rust", "C++", "WASM"], createdAt: "2024-02-03T08:00:00Z" },
-  { _id: "3", groupName: "ML & AI Practitioners", totalMembers: 6500, onlineMembers: 540, createdBy: { _id: "u3", name: "Sophie Zhang" }, file: "🤖", about: "Cutting-edge ML research, fine-tuning LLMs, RAG pipelines.", topics: ["Python", "PyTorch", "LLM"], createdAt: "2024-01-20T12:00:00Z" },
-  { _id: "4", groupName: "Web3 & Solidity Devs", totalMembers: 1870, onlineMembers: 75, createdBy: { _id: "u4", name: "Marcus Lee" }, file: "🔗", about: "Smart contracts, DeFi protocols, NFT standards.", topics: ["Solidity", "Ethereum", "Hardhat"], createdAt: "2024-03-01T09:00:00Z" },
-  { _id: "5", groupName: "DevOps & Cloud Architects", totalMembers: 3200, onlineMembers: 187, createdBy: { _id: "u5", name: "Priya Sharma" }, file: "☁️", about: "Kubernetes, Terraform, CI/CD pipelines, observability.", topics: ["Kubernetes", "AWS", "Terraform"], createdAt: "2024-01-15T11:00:00Z" },
-];
-
-const ALL_TOPICS = ["React", "Next.js", "TypeScript", "Rust", "Python", "PyTorch", "Solidity", "Kubernetes", "AWS"];
+type Discussion = Community;
 
 function timeAgo(dateStr: string) {
-  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  const days = Math.floor(
+    (Date.now() - new Date(dateStr).getTime()) / 86400000
+  );
   if (days === 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 30) return `${days}d ago`;
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-// ─── Components ──────────────────────────────────────────────────────
-function DiscussionCard({ discussion, isJoined, onJoin }: { discussion: Discussion; isJoined: boolean; onJoin: (id: string) => void }) {
+function DiscussionCard({
+  discussion,
+  isJoined,
+  onJoin,
+  userId
+}: {
+  discussion: Discussion;
+  isJoined: boolean;
+  userId : string,
+  onJoin: (id: string) => void;
+}) {
+  const createdByName =
+    typeof discussion.createdBy === "object"
+      ? discussion.createdBy.username
+      : "Unknown";
+
+  const hasImage =
+    typeof discussion.file === "string" &&
+    discussion.file.trim().startsWith("http");
+
   return (
-    <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5">
+    <div className="rounded-2xl border border-[#E8EDF2] bg-white p-5">
       <div className="flex gap-3">
-        <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-2xl shrink-0">
-          {discussion.file ?? "💬"}
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-2xl">
+          {hasImage ? (
+            <img
+              src={discussion.file}
+              alt={discussion.communityName}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span>💬</span>
+          )}
         </div>
+
         <div className="flex-1">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h3 className="font-semibold text-[#0D1B2A]">{discussion.groupName}</h3>
-              <div className="flex items-center gap-2 text-xs text-[#64748B] mt-0.5">
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> {discussion.onlineMembers} online</span>
+              <h3 className="font-semibold text-[#0D1B2A]">
+                {discussion.communityName}
+              </h3>
+              <div className="mt-0.5 flex items-center gap-2 text-xs text-[#64748B]">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />{" "}
+                  {discussion.onlineMembers} online
+                </span>
                 <span>•</span>
                 <span>{discussion.totalMembers} members</span>
                 <span>•</span>
@@ -58,20 +96,47 @@ function DiscussionCard({ discussion, isJoined, onJoin }: { discussion: Discussi
               </div>
             </div>
           </div>
-          {discussion.about && <p className="text-sm text-[#64748B] mt-2">{discussion.about}</p>}
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {discussion.topics.slice(0, 3).map(t => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{t}</span>
+
+          {discussion.about && (
+            <p className="mt-2 text-sm text-[#64748B]">{discussion.about}</p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {(discussion.topics || []).slice(0, 3).map((t) => (
+              <span
+                key={t}
+                className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+              >
+                {t}
+              </span>
             ))}
           </div>
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#E8EDF2]">
-            <div className="text-xs text-[#64748B]">Created by {discussion.createdBy.name}</div>
-            {isJoined ? (
-              <Link href={`/chatrooms/${discussion._id}`}>
-                <button className="px-4 py-1.5 rounded-lg text-sm font-medium bg-[#0D1B2A] text-white hover:bg-[#1E3A5F]">Enter →</button>
+
+          <div className="mt-4 flex items-center justify-between border-t border-[#E8EDF2] pt-3">
+            <div className="text-xs text-[#64748B]">
+              Created by {createdByName}
+            </div>
+
+            {discussion.joinedMembers.includes(userId) ? (
+              <Link href={`/community/${discussion._id}`}>
+                <span className="rounded-lg bg-[#0D1B2A] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#1E3A5F]">
+                  Enter →
+                </span>
               </Link>
-            ) : (
-              <button onClick={() => onJoin(discussion._id)} className="px-4 py-1.5 rounded-lg text-sm font-medium border border-[#E8EDF2] text-[#0D1B2A] hover:bg-gray-50">+ Join</button>
+            ) :discussion.pendingRequests.includes(userId) ?  (
+              <button
+                disabled={true}
+                className="rounded-lg border border-[#E8EDF2] px-4 py-1.5 text-sm font-medium text-gray-400 hover:bg-gray-50"
+              >
+                sent
+              </button>
+            ) :  (
+              <button
+                onClick={() => onJoin(discussion._id)}
+                className="rounded-lg border border-[#E8EDF2] px-4 py-1.5 text-sm font-medium text-[#0D1B2A] hover:bg-gray-50"
+              >
+                + Join
+              </button>
             )}
           </div>
         </div>
@@ -80,55 +145,173 @@ function DiscussionCard({ discussion, isJoined, onJoin }: { discussion: Discussi
   );
 }
 
-function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (g: Partial<Discussion>) => void }) {
-  const [form, setForm] = useState({ groupName: "", about: "", file: "", topics: "" });
+function CreateModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (data: {
+    communityName: string;
+    about: string;
+    topics: string;
+    file: File | null;
+  }) => Promise<boolean>;
+}) {
+  const [form, setForm] = useState({
+    communityName: "",
+    about: "",
+    topics: "",
+  });
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    if (!form.groupName.trim()) { setError("Group name required"); return; }
-    onCreate({
-      _id: Date.now().toString(),
-      groupName: form.groupName,
-      about: form.about,
-      file: form.file || "💬",
-      topics: form.topics.split(",").map(t => t.trim()).filter(Boolean),
-      totalMembers: 1,
-      onlineMembers: 1,
-      createdBy: { _id: "me", name: "You" },
-      createdAt: new Date().toISOString(),
-    });
-    onClose();
-    toast.success("Room created!");
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] || null;
+    setFile(picked);
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    if (picked) {
+      setPreviewUrl(URL.createObjectURL(picked));
+    } else {
+      setPreviewUrl("");
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!form.communityName.trim()) {
+      setError("Community name is required");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const ok = await onCreate({
+        communityName: form.communityName.trim(),
+        about: form.about.trim(),
+        topics: form.topics.trim(),
+        file,
+      });
+
+      if (ok) {
+        setForm({
+          communityName: "",
+          about: "",
+          topics: "",
+        });
+        setFile(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl("");
+        onClose();
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-[#E8EDF2]" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-6 py-4 border-b border-[#E8EDF2]">
-          <h2 className="text-lg font-bold text-[#0D1B2A]">Create a chatroom</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-[#E8EDF2] bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#E8EDF2] px-6 py-4">
+          <h2 className="text-lg font-bold text-[#0D1B2A]">
+            Create a Community
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <div className="p-6 space-y-4">
+
+        <div className="space-y-4 p-6">
           <div>
-            <label className="block text-sm font-medium text-[#0D1B2A] mb-1">Icon (emoji or URL)</label>
-            <input className="w-full px-3 py-2 border border-[#E8EDF2] rounded-lg" value={form.file} onChange={e => setForm(f => ({ ...f, file: e.target.value }))} placeholder="🚀" />
+            <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+              Cover image
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2"
+            />
+            {previewUrl && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-[#E8EDF2]">
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="h-40 w-full object-cover"
+                />
+              </div>
+            )}
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-[#0D1B2A] mb-1">Room name *</label>
-            <input className="w-full px-3 py-2 border border-[#E8EDF2] rounded-lg" value={form.groupName} onChange={e => { setForm(f => ({ ...f, groupName: e.target.value })); setError(""); }} required />
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+              Community Name *
+            </label>
+            <input
+              className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
+              value={form.communityName}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, communityName: e.target.value }));
+                setError("");
+              }}
+              placeholder="React Developers"
+            />
+            {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-[#0D1B2A] mb-1">Description</label>
-            <textarea rows={3} className="w-full px-3 py-2 border border-[#E8EDF2] rounded-lg resize-none" value={form.about} onChange={e => setForm(f => ({ ...f, about: e.target.value }))} />
+            <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+              Description
+            </label>
+            <textarea
+              rows={3}
+              className="w-full resize-none rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
+              value={form.about}
+              onChange={(e) => setForm((f) => ({ ...f, about: e.target.value }))}
+              placeholder="What is this community about?"
+            />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-[#0D1B2A] mb-1">Topics (comma separated)</label>
-            <input className="w-full px-3 py-2 border border-[#E8EDF2] rounded-lg" placeholder="React, Next.js" value={form.topics} onChange={e => setForm(f => ({ ...f, topics: e.target.value }))} />
+            <label className="mb-1 block text-sm font-medium text-[#0D1B2A]">
+              Topics (comma separated)
+            </label>
+            <input
+              className="w-full rounded-lg border border-[#E8EDF2] px-3 py-2 outline-none focus:ring-1 focus:ring-[#0EA472]"
+              placeholder="React, Next.js, TypeScript"
+              value={form.topics}
+              onChange={(e) => setForm((f) => ({ ...f, topics: e.target.value }))}
+            />
           </div>
+
           <div className="flex gap-3 pt-2">
-            <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#E8EDF2] text-[#64748B] hover:bg-gray-50">Cancel</button>
-            <button onClick={handleSubmit} className="flex-1 py-2 rounded-lg bg-[#0D1B2A] text-white hover:bg-[#1E3A5F]">Create</button>
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-[#E8EDF2] py-2 text-[#64748B] hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 rounded-lg bg-[#0D1B2A] py-2 text-white hover:bg-[#1E3A5F] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? "Creating..." : "Create"}
+            </button>
           </div>
         </div>
       </div>
@@ -136,146 +319,374 @@ function CreateModal({ onClose, onCreate }: { onClose: () => void; onCreate: (g:
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────
 export default function DiscussionsPage() {
-  const [discussions, setDiscussions] = useState<Discussion[]>(MOCK_DISCUSSIONS);
+  const currentUser = useAppSelector((state: any) => state.User.userData);
+  const userId = String(currentUser?._id || "");
+
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"members" | "online" | "newest">("online");
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set(["1", "3"]));
-  const [activeTab, setActiveTab] = useState<"all" | "joined" | "trending">("all");
+  const [sortBy, setSortBy] = useState<"members" | "online" | "newest">(
+    "online"
+  );
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<"all" | "joined" | "trending">(
+    "all"
+  );
   const [showModal, setShowModal] = useState(false);
 
-  const totalOnline = discussions.reduce((s, d) => s + d.onlineMembers, 0);
-  const totalMembers = discussions.reduce((s, d) => s + d.totalMembers, 0);
+  const fetchCommunities = async () => {
+    try {
+      setLoading(true);
+      const { data } = await axios.get("/api/community");
+      const communities: Discussion[] = data.communities || [];
+      setDiscussions(communities);
 
-  const filtered = discussions
-    .filter(d => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || d.groupName.toLowerCase().includes(q) || d.about?.toLowerCase().includes(q) || d.topics.some(t => t.toLowerCase().includes(q));
-      const matchTopic = !selectedTopic || d.topics.includes(selectedTopic);
-      const matchTab = activeTab === "all" ? true : activeTab === "joined" ? joinedIds.has(d._id) : d.onlineMembers > 150;
-      return matchSearch && matchTopic && matchTab;
-    })
-    .sort((a, b) => {
-      if (sortBy === "members") return b.totalMembers - a.totalMembers;
-      if (sortBy === "online") return b.onlineMembers - a.onlineMembers;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+      if (userId) {
+        const joined = communities
+          .filter((c) =>
+            Array.isArray(c.joinedMembers)
+              ? c.joinedMembers.some((m) => String(m) === userId)
+              : false
+          )
+          .map((c) => c._id);
 
-  const handleJoin = (id: string) => {
-    setJoinedIds(prev => new Set(prev).add(id));
-    toast.success("Joined room!");
+        setJoinedIds(new Set(joined));
+      } else {
+        setJoinedIds(new Set());
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to load communities");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    fetchCommunities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const handleJoin = async (communityId: string) => {
+    if (!userId) {
+      toast.error("Please log in to join");
+      return;
+    }
+
+    try {
+      const { data } = await axios.post(`/api/community/${communityId}/request`);
+      toast.success(data.message || "Joined community!");
+
+      setJoinedIds((prev) => new Set(prev).add(communityId));
+      setDiscussions((prev) =>
+        prev.map((c) =>
+          c._id === communityId
+            ? {
+                ...c,
+                totalMembers: c.totalMembers + 1,
+                joinedMembers: [...c.joinedMembers, userId],
+              }
+            : c
+        )
+      );
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to join");
+    }
+  };
+
+  const handleCreate = async (payload: {
+    communityName: string;
+    about: string;
+    topics: string;
+    file: File | null;
+  }) => {
+    try {
+      const formData = new FormData();
+      formData.append("communityName", payload.communityName);
+      formData.append("about", payload.about);
+      formData.append("topics", payload.topics);
+      if (payload.file) {
+        formData.append("file", payload.file);
+      }
+
+      const { data } = await axios.post("/api/community", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      toast.success(data?.message || "Community created!");
+
+      if (data?.community?._id) {
+        setDiscussions((prev) => [data.community, ...prev]);
+        setJoinedIds((prev) => new Set(prev).add(data.community._id));
+      } else {
+        await fetchCommunities();
+      }
+
+      return true;
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message || "Failed to create community"
+      );
+      return false;
+    }
+  };
+
+  const filtered = useMemo(() => {
+    return discussions
+      .filter((d) => {
+        const q = search.toLowerCase();
+
+        const matchSearch =
+          !q ||
+          d.communityName.toLowerCase().includes(q) ||
+          (d.about || "").toLowerCase().includes(q) ||
+          (d.topics || []).some((t) => t.toLowerCase().includes(q));
+
+        const matchTopic = !selectedTopic || (d.topics || []).includes(selectedTopic);
+
+        const matchTab =
+          activeTab === "all"
+            ? true
+            : activeTab === "joined"
+            ? joinedIds.has(d._id)
+            : d.onlineMembers > 150;
+
+        return matchSearch && matchTopic && matchTab;
+      })
+      .sort((a, b) => {
+        if (sortBy === "members") return b.totalMembers - a.totalMembers;
+        if (sortBy === "online") return b.onlineMembers - a.onlineMembers;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [discussions, search, selectedTopic, sortBy, activeTab, joinedIds]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8FAFB]">
+        <div className="text-gray-500">Loading communities...</div>
+      </div>
+    );
+  }
+
+  const totalOnline = discussions.reduce((s, d) => s + d.onlineMembers, 0);
+
   return (
-    <div className="bg-[#F8FAFB] min-h-screen font-sans">
-      {/* Header */}
+    <div className="min-h-screen bg-[#F8FAFB] font-sans">
       <div className="border-b border-[#E8EDF2] bg-white px-6 py-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-[#EDF7F3] border border-[#A7F3D0] rounded-full px-3 py-1 text-xs text-[#047857] mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> {totalOnline} developers online
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#A7F3D0] bg-[#EDF7F3] px-3 py-1 text-xs text-[#047857]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+            {totalOnline} developers online
           </div>
-          <h1 className="text-3xl font-bold text-[#0D1B2A]">Join the <span className="text-[#0EA472]">Community</span></h1>
-          <p className="text-sm text-[#64748B] mt-1 max-w-xl">Topic-based chatrooms for every tech stack. Find your community, share knowledge, and build in public.</p>
+          <h1 className="text-3xl font-bold text-[#0D1B2A]">
+            Join the <span className="text-[#0EA472]">Community</span>
+          </h1>
+          <p className="mt-1 max-w-xl text-sm text-[#64748B]">
+            Topic-based chatrooms for every tech stack. Find your community, share
+            knowledge, and build in public.
+          </p>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="sticky top-0 z-30 bg-white border-b border-[#E8EDF2] px-6 py-3">
-        <div className="max-w-7xl mx-auto flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+      <div className="sticky top-0 z-30 border-b border-[#E8EDF2] bg-white px-6 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
             {[
               { key: "all", label: "All" },
               { key: "joined", label: `Joined (${joinedIds.size})` },
               { key: "trending", label: "Trending" },
-            ].map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`px-3 py-1.5 text-sm font-medium rounded-md ${activeTab === tab.key ? "bg-white text-[#0D1B2A] shadow-sm" : "text-[#64748B] hover:bg-gray-200"}`}>
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  activeTab === tab.key
+                    ? "bg-white text-[#0D1B2A] shadow-sm"
+                    : "text-[#64748B] hover:bg-gray-200"
+                }`}
+              >
                 {tab.label}
               </button>
             ))}
           </div>
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Search rooms, topics..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-[#E8EDF2] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#0EA472]" />
+
+          <div className="relative w-full max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search rooms, topics..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-[#E8EDF2] py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#0EA472]"
+            />
           </div>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="px-3 py-2 border border-[#E8EDF2] rounded-lg text-sm bg-white">
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="rounded-lg border border-[#E8EDF2] bg-white px-3 py-2 text-sm"
+          >
             <option value="online">By online</option>
             <option value="members">By members</option>
             <option value="newest">Newest</option>
           </select>
-          <button onClick={() => setShowModal(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D1B2A] text-white text-sm hover:bg-[#1E3A5F]"><Plus className="w-4 h-4" /> Create Room</button>
+
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm text-white hover:bg-[#1E3A5F]"
+          >
+            <Plus className="h-4 w-4" /> Create Room
+          </button>
         </div>
 
-        {/* Topic pills */}
-        <div className="max-w-7xl mx-auto mt-3 flex gap-2 overflow-x-auto pb-1">
-          <button onClick={() => setSelectedTopic(null)} className={`shrink-0 text-xs px-3 py-1 rounded-full border ${!selectedTopic ? "bg-[#0D1B2A] text-white border-[#0D1B2A]" : "bg-white text-[#64748B] border-[#E8EDF2] hover:bg-gray-50"}`}>All topics</button>
-          {ALL_TOPICS.map(t => (
-            <button key={t} onClick={() => setSelectedTopic(selectedTopic === t ? null : t)} className={`shrink-0 text-xs px-3 py-1 rounded-full border ${selectedTopic === t ? "bg-[#0D1B2A] text-white border-[#0D1B2A]" : "bg-white text-[#64748B] border-[#E8EDF2] hover:bg-gray-50"}`}>{t}</button>
+        <div className="mx-auto mt-3 flex max-w-7xl gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setSelectedTopic(null)}
+            className={`shrink-0 rounded-full border px-3 py-1 text-xs ${
+              !selectedTopic
+                ? "border-[#0D1B2A] bg-[#0D1B2A] text-white"
+                : "border-[#E8EDF2] bg-white text-[#64748B] hover:bg-gray-50"
+            }`}
+          >
+            All topics
+          </button>
+
+          {[...new Set(discussions.flatMap((d) => d.topics || []))].map((t) => (
+            <button
+              key={t}
+              onClick={() => setSelectedTopic(selectedTopic === t ? null : t)}
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${
+                selectedTopic === t
+                  ? "border-[#0D1B2A] bg-[#0D1B2A] text-white"
+                  : "border-[#E8EDF2] bg-white text-[#64748B] hover:bg-gray-50"
+              }`}
+            >
+              {t}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Main grid */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-4 text-sm text-[#64748B]">Showing {filtered.length} rooms{selectedTopic && ` in ${selectedTopic}`}</div>
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-4 text-sm text-[#64748B]">
+          Showing {filtered.length} rooms
+          {selectedTopic && ` in ${selectedTopic}`}
+        </div>
 
         {filtered.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-[#E8EDF2] rounded-2xl">
-            <div className="text-4xl mb-2">🔍</div>
+          <div className="rounded-2xl border border-[#E8EDF2] bg-white py-16 text-center">
+            <div className="mb-2 text-4xl">🔍</div>
             <h3 className="font-semibold text-[#0D1B2A]">No rooms found</h3>
-            <p className="text-sm text-[#64748B] mt-1">Try a different search or create your own room.</p>
-            <button onClick={() => setShowModal(true)} className="mt-4 px-5 py-2 rounded-lg bg-[#0D1B2A] text-white text-sm">Create a room →</button>
+            <p className="mt-1 text-sm text-[#64748B]">
+              Try a different search or create your own room.
+            </p>
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-4 rounded-lg bg-[#0D1B2A] px-5 py-2 text-sm text-white"
+            >
+              Create a room →
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filtered.map(d => (
-              <DiscussionCard key={d._id} discussion={d} isJoined={joinedIds.has(d._id)} onJoin={handleJoin} />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((d) => (
+              <DiscussionCard
+                key={d._id}
+                userId={userId ?? ""}
+                discussion={d}
+                isJoined={joinedIds.has(d._id)}
+                onJoin={handleJoin}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Trending topics / Most active sidebar (simplified) */}
       <div className="border-t border-[#E8EDF2] bg-white py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
             <div>
-              <h2 className="text-xl font-bold text-[#0D1B2A] mb-4">🔥 Trending topics</h2>
+              <h2 className="mb-4 text-xl font-bold text-[#0D1B2A]">
+                🔥 Trending topics
+              </h2>
               <div className="flex flex-wrap gap-2">
-                {ALL_TOPICS.map(t => {
-                  const count = discussions.filter(d => d.topics.includes(t)).length;
+                {[...new Set(discussions.flatMap((d) => d.topics || []))].map((t) => {
+                  const count = discussions.filter((d) =>
+                    (d.topics || []).includes(t)
+                  ).length;
                   return (
-                    <button key={t} onClick={() => { setSelectedTopic(t); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-3 py-1.5 rounded-full border border-[#E8EDF2] text-sm text-[#0D1B2A] hover:bg-gray-50">
-                      {t} {count > 0 && <span className="text-xs text-[#64748B] ml-1">({count})</span>}
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setSelectedTopic(t);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="rounded-full border border-[#E8EDF2] px-3 py-1.5 text-sm text-[#0D1B2A] hover:bg-gray-50"
+                    >
+                      {t}
+                      {count > 0 && (
+                        <span className="ml-1 text-xs text-[#64748B]">
+                          ({count})
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </div>
+
             <div>
-              <h2 className="text-xl font-bold text-[#0D1B2A] mb-4">⚡ Most active</h2>
+              <h2 className="mb-4 text-xl font-bold text-[#0D1B2A]">
+                ⚡ Most active
+              </h2>
               <div className="space-y-3">
-                {[...discussions].sort((a, b) => b.onlineMembers - a.onlineMembers).slice(0, 5).map((d, i) => (
-                  <div key={d._id} className="flex items-center gap-3 p-3 border border-[#E8EDF2] rounded-xl">
-                    <span className="w-6 text-center font-medium text-gray-500">{i + 1}</span>
-                    <span className="text-xl">{d.file ?? "💬"}</span>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm text-[#0D1B2A]">{d.groupName}</p>
-                      <p className="text-xs text-[#64748B]">{d.onlineMembers} online</p>
+                {[...discussions]
+                  .sort((a, b) => b.onlineMembers - a.onlineMembers)
+                  .slice(0, 5)
+                  .map((d, i) => (
+                    <div
+                      key={d._id}
+                      className="flex items-center gap-3 rounded-xl border border-[#E8EDF2] p-3"
+                    >
+                      <span className="w-6 text-center font-medium text-gray-500">
+                        {i + 1}
+                      </span>
+                      <span className="text-xl">
+                        {d.file && d.file.startsWith("http") ? "🖼️" : "💬"}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-[#0D1B2A]">
+                          {d.communityName}
+                        </p>
+                        <p className="text-xs text-[#64748B]">
+                          {d.onlineMembers} online
+                        </p>
+                      </div>
+                      {!joinedIds.has(d._id) && (
+                        <button
+                          onClick={() => handleJoin(d._id)}
+                          className="rounded-full border border-[#E8EDF2] px-3 py-1 text-xs text-[#0D1B2A] hover:bg-gray-50"
+                        >
+                          Join
+                        </button>
+                      )}
                     </div>
-                    {!joinedIds.has(d._id) && (
-                      <button onClick={() => handleJoin(d._id)} className="text-xs px-3 py-1 rounded-full border border-[#E8EDF2] text-[#0D1B2A] hover:bg-gray-50">Join</button>
-                    )}
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {showModal && <CreateModal onClose={() => setShowModal(false)} onCreate={g => setDiscussions(prev => [{ ...g, _id: g._id!, totalMembers: 1, onlineMembers: 1, createdBy: { _id: "me", name: "You" }, createdAt: new Date().toISOString() } as Discussion, ...prev])} />}
+      {showModal && (
+        <CreateModal
+          onClose={() => setShowModal(false)}
+          onCreate={handleCreate}
+        />
+      )}
     </div>
   );
 }

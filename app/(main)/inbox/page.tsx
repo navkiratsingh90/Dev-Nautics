@@ -223,14 +223,82 @@ export default function InboxRequestsPage() {
   };
 
   // --- Community request handlers (mock) ---
-  const approveCommunity = async (userId: string, communityId: string) => {
-    toast.success("Community request approved (mock)");
-    setCommunityReqs((prev) => prev.filter((req) => req.userId !== userId || req.communityId !== communityId));
+  const approveCommunity = async (
+    userId,
+    communityId
+  ) => {
+    try {
+      setLoading(prev => ({
+        ...prev,
+        [`${communityId}-${userId}`]: true,
+      }));
+  
+      const { data } = await axios.post(
+        `/api/community/${communityId}/approve`,
+        { userId }
+      );
+  
+      toast.success(data.message);
+  
+      setCommunityReqs(prev =>
+        prev.filter(
+          req =>
+            !(
+              req.userId === userId &&
+              req.communityId === communityId
+            )
+        )
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+        "Failed to approve request"
+      );
+    } finally {
+      setLoading(prev => ({
+        ...prev,
+        [`${communityId}-${userId}`]: false,
+      }));
+    }
   };
 
-  const declineCommunity = async (userId: string, communityId: string) => {
-    toast.success("Community request declined (mock)");
-    setCommunityReqs((prev) => prev.filter((req) => req.userId !== userId || req.communityId !== communityId));
+  const declineCommunity = async (
+    userId,
+    communityId
+  ) => {
+    try {
+      setLoading(prev => ({
+        ...prev,
+        [`${communityId}-${userId}`]: true,
+      }));
+  
+      const { data } = await axios.post(
+        `/api/community/${communityId}/reject-request`,
+        { userId }
+      );
+  
+      toast.success(data.message);
+  
+      setCommunityReqs(prev =>
+        prev.filter(
+          req =>
+            !(
+              req.userId === userId &&
+              req.communityId === communityId
+            )
+        )
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+        "Failed to reject request"
+      );
+    } finally {
+      setLoading(prev => ({
+        ...prev,
+        [`${communityId}-${userId}`]: false,
+      }));
+    }
   };
 
   // --- Search filters ---
