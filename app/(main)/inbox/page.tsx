@@ -38,6 +38,7 @@ interface ConnectionRequest {
 }
 
 interface CommunityRequest {
+  // _id : string
   userId: string;
   username: string;
   about: string;
@@ -51,31 +52,6 @@ interface CommunityRequest {
 
 type RequestTab = "connections" | "communities";
 
-// --- Mock community data (unchanged) ---
-const initialCommunityRequests: CommunityRequest[] = [
-  {
-    userId: "u1",
-    username: "Marcus Johnson",
-    about: "Open-source contributor wanting to join an active build community.",
-    skills: ["Go", "CLI Tools", "Open Source"],
-    communityId: "c1",
-    communityName: "Dev Builders Hub",
-    communityIcon: "DB",
-    members: 1240,
-    sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    userId: "u2",
-    username: "Aanya Singh",
-    about: "Student developer learning web development and looking for guidance.",
-    skills: ["HTML", "CSS", "JavaScript"],
-    communityId: "c2",
-    communityName: "Frontend Circle",
-    communityIcon: "FC",
-    members: 860,
-    sentAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  },
-];
 
 // --- Helper: time ago ---
 const formatTimeAgo = (dateString: string) => {
@@ -148,7 +124,7 @@ export default function InboxRequestsPage() {
   const [search, setSearch] = useState("");
 
   const [connectionReqs, setConnectionReqs] = useState<ConnectionRequest[]>([]);
-  const [communityReqs, setCommunityReqs] = useState<CommunityRequest[]>(initialCommunityRequests);
+  const [communityReqs, setCommunityReqs] = useState<CommunityRequest[]>([]);
 
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [fetching, setFetching] = useState(true);
@@ -224,9 +200,11 @@ export default function InboxRequestsPage() {
 
   // --- Community request handlers (mock) ---
   const approveCommunity = async (
-    userId,
-    communityId
+    userId : string,
+    communityId : string
   ) => {
+    console.log(userId , communityId);
+    
     try {
       setLoading(prev => ({
         ...prev,
@@ -263,8 +241,8 @@ export default function InboxRequestsPage() {
   };
 
   const declineCommunity = async (
-    userId,
-    communityId
+    userId : string,
+    communityId : string
   ) => {
     try {
       setLoading(prev => ({
@@ -273,7 +251,7 @@ export default function InboxRequestsPage() {
       }));
   
       const { data } = await axios.post(
-        `/api/community/${communityId}/reject-request`,
+        `/api/community/${communityId}/reject`,
         { userId }
       );
   
@@ -300,7 +278,19 @@ export default function InboxRequestsPage() {
       }));
     }
   };
-
+  useEffect(() => {
+    const fetchCommunities = async () => {
+      try {
+          const {data} = await axios.get(`api/community/pending-requests`)
+          console.log(data);  
+          setCommunityReqs(data.requests)
+      } catch (error) {
+        console.error(error);
+        
+      }
+    }
+    fetchCommunities()
+  },[])
   // --- Search filters ---
   const filteredConnections = useMemo(() => {
     return connectionReqs.filter((req) => {
@@ -503,7 +493,9 @@ export default function InboxRequestsPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex items-start gap-4 min-w-0">
                             <div className="w-12 h-12 rounded-2xl bg-[#EDF7F3] flex items-center justify-center text-[#0EA472] font-bold border border-[#A7F3D0] shrink-0">
-                              {req.communityIcon}
+                              <img
+                              className="w-full h-full rounded-xl"
+                               src={req.communityIcon} alt="" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -543,7 +535,7 @@ export default function InboxRequestsPage() {
                               </p>
                             </div>
                             <Link
-                              href={`/communities/${req.communityId}`}
+                              href={`/community/${req.communityId}`}
                               className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#0EA472] hover:opacity-80 transition"
                             >
                               View community

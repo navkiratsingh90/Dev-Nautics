@@ -27,8 +27,9 @@ import {
   Pin,
   MoreVertical,
 } from "lucide-react";
+import { socket } from "@/lib/socket";
 
-type MemberRef = string | { _id?: string; username?: string };
+type MemberRef ={ _id?: string; username?: string };
 
 interface Message {
   _id: string;
@@ -242,14 +243,12 @@ export default function ChatPage() {
   const creatorId = normalizeId(community?.createdBy);
   const isCreator = creatorId === userId;
 
-  // Admin management functions
   const makeAdmin = async (memberId: string) => {
     if (!communityId) return;
     try {
-      const { data } = await axios.post(`/api/community/${communityId}/admin`, { userId: memberId });
+      const { data } = await axios.post(`/api/community/${communityId}/admin`, { userIdToMakeAdmin: memberId });
       toast.success(data.message || "Admin added");
-      // Update community admins locally
-      setCommunity((prev) => {
+      setCommunity((prev : any) => {
         if (!prev) return prev;
         const newAdmins = [...(prev.admins || []), memberId];
         return { ...prev, admins: newAdmins };
@@ -262,7 +261,7 @@ export default function ChatPage() {
   const removeAdmin = async (memberId: string) => {
     if (!communityId) return;
     try {
-      const { data } = await axios.delete(`/api/community/${communityId}/admin`, { data: { userId: memberId } });
+      const { data } = await axios.post(`/api/community/${communityId}/admin`, {  userIdToMakeAdmin: memberId  });
       toast.success(data.message || "Admin removed");
       setCommunity((prev) => {
         if (!prev) return prev;
@@ -270,11 +269,10 @@ export default function ChatPage() {
         return { ...prev, admins: newAdmins };
       });
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to remove admin");
+      console.error(error.response?.data?.message );
     }
   };
 
-  // ... (handleJoin, handleLeave, handleSendMessage, handleFilePick, copyMessage remain the same)
   const handleJoin = async () => {
     if (!communityId) return;
     if (!userId) {
@@ -306,7 +304,8 @@ export default function ChatPage() {
       setLeaving(false);
     }
   };
-
+  console.log(community?.createdBy._id , userId);
+  
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isJoined) {
@@ -327,12 +326,12 @@ export default function ChatPage() {
       await axios.post("/api/messages", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-
-      setNewMessage("");
+      socket.emit("send-message", text);
+      setNewMessage("");  
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setShowEmoji(false);
-      await fetchMessages();
+      // await fetchMessages();/
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to send message");
     } finally {
@@ -353,6 +352,32 @@ export default function ChatPage() {
       toast.error("Copy failed");
     }
   };
+  useEffect(() => {
+    socket.connect();
+
+    socket.emit("join-community", communityId);
+
+    socket.on("receive-message", (message) => {
+      console.log(message);
+      
+      setMessages((prev) => [...prev, message]);
+    });
+
+    socket.on("connect", () => {
+      console.log("🟢 Connected:", socket.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.log("🔴 Connection error:", err.message);
+    });
+
+    return () => {
+      socket.off("receive-message");
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.disconnect();
+    };
+  }, [communityId,userId]);
 
   if (loading) {
     return (
@@ -658,7 +683,7 @@ export default function ChatPage() {
                           </div>
 
                           {/* Dropdown for creator only */}
-                          {isCreator && creatorId !== id && (
+                          {community.createdBy._id?.toString() == userId.toString() && m._id != userId && (
                             <div className="relative">
                               <button
                                 onClick={() => setDropdownOpen(dropdownOpen === id ? null : id)}
@@ -699,7 +724,7 @@ export default function ChatPage() {
                   </div>
                 </div>
 
-                {/* Mute/Pin/Leave actions (unchanged) */}
+                {/* Mute/Pin/Leave actions */}
                 <div className="space-y-2">
                   <button
                     onClick={() => setMuted((v) => !v)}

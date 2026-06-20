@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ communityId: string }> }
 ) {
   try {
     await connectDb();
@@ -38,20 +38,11 @@ export async function POST(
       );
     }
 
-    const { id } = await params;
+    const { communityId } = await params;
     const { userId } = await req.json();
-
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(userId)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid id",
-        },
-        { status: 400 }
-      );
-    }
-
-    const community = await Community.findById(id);
+    console.log(userId , communityId);
+    
+    const community = await Community.findById(communityId);
 
     if (!community) {
       return NextResponse.json(

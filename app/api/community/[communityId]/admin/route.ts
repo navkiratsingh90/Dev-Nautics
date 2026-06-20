@@ -2,12 +2,11 @@ import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import Community from "@/models/community-model";
 import User from "@/models/user-model";
-import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ communityId: string }> }
 ) {
   try {
     await connectDb();
@@ -24,11 +23,11 @@ export async function POST(
       );
     }
 
-    const requester = await User.findOne({
+    const currentUser = await User.findOne({
       email: session.user.email,
-    });
+    }).select("_id");
 
-    if (!requester) {
+    if (!currentUser) {
       return NextResponse.json(
         {
           success: false,
@@ -38,20 +37,10 @@ export async function POST(
       );
     }
 
-    const { id } = await params;
+    const { communityId } = await params;
     const { userIdToMakeAdmin } = await req.json();
-
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(userIdToMakeAdmin)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid id",
-        },
-        { status: 400 }
-      );
-    }
-
-    const community = await Community.findById(id);
+    
+    const community = await Community.findById(communityId);
 
     if (!community) {
       return NextResponse.json(
@@ -63,29 +52,31 @@ export async function POST(
       );
     }
 
-    const isAllowed =
-      community.createdBy.toString() === requester._id.toString() ||
-      community.admins?.some((a: any) => a.toString() === requester._id.toString());
+    const isAdmin =
+      community.createdBy.toString() === currentUser._id.toString() ||
+      community.admins.some(
+        (id: any) => id.toString() === currentUser._id.toString()
+      );
 
-    if (!isAllowed) {
+    if (!isAdmin) {
       return NextResponse.json(
         {
           success: false,
-          message: "Only admins can manage admin roles",
+          message: "Only admins can manage roles",
         },
         { status: 403 }
       );
     }
-
-    const isMember = community.joinedMembers?.some(
-      (m: any) => m.toString() === userIdToMakeAdmin
+    
+    const isMember = community.joinedMembers.some(
+      (id: any) => id.toString() == userIdToMakeAdmin
     );
 
     if (!isMember) {
       return NextResponse.json(
         {
           success: false,
-          message: "User must be a community member first",
+          message: "User must be a member first",
         },
         { status: 400 }
       );
@@ -95,47 +86,41 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message: "Creator is already the primary admin",
+          message: "Community creator cannot be modified",
         },
         { status: 400 }
       );
     }
 
-    const alreadyAdmin = community.admins?.some(
-      (a: any) => a.toString() === userIdToMakeAdmin
+    const alreadyAdmin = community.admins.some(
+      (id: any) => id.toString() === userIdToMakeAdmin
     );
+
+    let message = "";
 
     if (alreadyAdmin) {
       community.admins = community.admins.filter(
-        (a: any) => a.toString() !== userIdToMakeAdmin
+        (id: any) => id.toString() !== userIdToMakeAdmin
       );
 
-      await community.save();
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Admin role removed",
-          community,
-        },
-        { status: 200 }
-      );
+      message = "Admin removed successfully";
+    } else {
+      community.admins.push(userIdToMakeAdmin);
+      message = "Admin assigned successfully";
     }
-
-    community.admins.push(userIdToMakeAdmin);
 
     await community.save();
 
     return NextResponse.json(
       {
         success: true,
-        message: "Admin role assigned successfully",
-        community,
+        isAdmin: !alreadyAdmin,
+        message,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("ADMIN ROLE ERROR:", error);
+    console.error("TOGGLE ADMIN ERROR:", error);
 
     return NextResponse.json(
       {
