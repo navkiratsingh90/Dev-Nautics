@@ -1,16 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAppSelector } from "@/redux/hooks";
 import { toast } from "sonner";
+import axios from "axios";
 import {
   ArrowLeft, Edit3, UserPlus, Trash2, Send, Github,
   Calendar, Clock, Users, X, CheckCircle, ExternalLink, Copy,
-  Briefcase, Sparkles, Layers, Target, Code2, Share2, UserCheck
+  Briefcase, Sparkles, Layers, Target, Code2, Share2, UserCheck,
+  MoreVertical
 } from "lucide-react";
 
-// ─── Types ──────────────────────────────────────────────────────
+// ─── Types (matching the Collaboration model) ──────────────────────────
 interface TeamMember {
   _id: string;
   user: { _id: string; username: string };
@@ -25,7 +28,7 @@ interface Project {
   problemStatement?: string;
   category: string;
   techStackUsed: string[];
-  status: string;
+  status: "Open" | "In Progress" | "On Hold" | "Completed" | "Closed";
   rolesLookingFor: string[];
   totalTeamSize: number;
   currentTeamMembers: TeamMember[];
@@ -36,25 +39,7 @@ interface Project {
   updatedAt: string;
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────
-const MOCK_PROJECT: Project = {
-  _id: "1", title: "AI-Powered Health Tracker",
-  description: "A smart wearable companion that uses ML to predict health anomalies before they become critical — real-time vitals, personalized coaching, and emergency alerts that notify your care team automatically.",
-  problemStatement: "Early disease detection is expensive and inaccessible to most people globally. Existing wearables capture data but don't act on it intelligently. We want to change that with a proactive, always-on AI health layer.",
-  category: "AI/ML", techStackUsed: ["Python", "TensorFlow", "React Native", "FastAPI", "PostgreSQL", "Redis"],
-  status: "Open", rolesLookingFor: ["ML Engineer", "Mobile Dev", "Backend Dev", "UI/UX Designer"],
-  totalTeamSize: 5,
-  currentTeamMembers: [
-    { _id: "m1", user: { _id: "u1", username: "navkirat" }, roleAssigned: "Project Lead", joinedAt: "2025-03-10T10:00:00Z" },
-    { _id: "m2", user: { _id: "u2", username: "sophie_ml" }, roleAssigned: "ML Engineer", joinedAt: "2025-03-12T10:00:00Z" },
-  ],
-  createdBy: { _id: "u1", username: "navkirat" },
-  contact: "nav@devconnect.io",
-  file: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80",
-  createdAt: "2025-03-10T10:00:00Z", updatedAt: "2025-04-01T10:00:00Z",
-};
-
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 const timeAgo = (d: string) => {
   const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
@@ -69,6 +54,7 @@ const statusMeta: Record<string, { label: string; bg: string; text: string }> = 
   "In Progress": { label: "In Progress", bg: "bg-blue-50", text: "text-blue-700" },
   "On Hold": { label: "On Hold", bg: "bg-amber-50", text: "text-amber-700" },
   "Completed": { label: "Completed", bg: "bg-gray-100", text: "text-gray-700" },
+  "Closed": { label: "Closed", bg: "bg-red-50", text: "text-red-700" },
 };
 
 const avatarColors = [
@@ -80,7 +66,7 @@ const avatarColors = [
   "bg-cyan-100 text-cyan-700",
 ];
 
-// ─── Modal Components (simplified) ─────────────────────────────
+// ─── Modal Components ────────────────────────────────────────────────────
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
@@ -171,14 +157,33 @@ function AddTeammateModal({ roles, onClose, onAdd }: { roles: string[]; onClose:
   );
 }
 
-function ApplyModal({ roles, onClose }: { roles: string[]; onClose: () => void }) {
+function ApplyModal({ roles, onClose, projectId }: { projectId : string, roles: string[]; onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ username: "", email: "", github: "", message: "", role: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => { onClose(); toast.success("Application sent!"); }, 1500);
+  
+    try {
+      setSubmitted(true);
+  
+      await axios.post(`/api/collaboration/${projectId}/request`, {
+        username: form.username,
+        email: form.email,
+        github: form.github,
+        role: form.role,
+        message: form.message,
+      });
+  
+      toast.success("Application sent!");
+  
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err: any) {
+      setSubmitted(false);
+      toast.error(err.response?.data?.message || "Failed to send application");
+    }
   };
 
   if (submitted) {
@@ -234,24 +239,116 @@ function ApplyModal({ roles, onClose }: { roles: string[]; onClose: () => void }
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────
+// ─── Main Page ──────────────────────────────────────────────────────────────
 export default function ProjectDetailPage() {
+  const router = useRouter();
   const params = useParams();
+  const projectId = params?.id as string;
+
+  const currentUser = useAppSelector((state: any) => state.User.userData);
+  const currentUserId = currentUser?._id || "";
+
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [showEdit, setShowEdit] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showApply, setShowApply] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null); 
 
-  const isLeader = true; // Replace with actual check
+  // ── Fetch project from API ─────────────────────────────────────────────
+  const fetchProject = async () => {
+    if (!projectId) {
+      setError("Project ID is missing");
+      setLoading(false);
+      return;
+    }
 
-  React.useEffect(() => {
-    setTimeout(() => { setProject(MOCK_PROJECT); setLoading(false); }, 400);
-  }, [params.id]);
+    try {
+      setLoading(true);
+      console.log(projectId);
+      const { data } = await axios.get(`/api/collaboration/${projectId}`);
+      if (data.success) {
+        setProject(data.data);
+      } else {
+        setError(data.message || "Failed to load project");
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to load project");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchProject();
+  }, [projectId]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────
+  const isLeader = project?.createdBy._id === currentUserId;
+
+  const handleEdit = async (updates: Partial<Project>) => {
+    if (!project) return;
+    
+    try {
+      const { data } = await axios.put(`/api/collaboration/${project._id}`, updates);
+      window.location.reload()
+      // setProject(data.project);
+      toast.success("Project updated");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update project");
+    }
+  };
+
+  const handleAddTeammate = async (member: TeamMember) => {
+    if (!project) return;
+    try {
+      const { data } = await axios.post(`/api/collaboration/${project._id}/team`, {
+        username: member.user.username,
+        roleAssigned: member.roleAssigned,
+      });
+      window.location.reload()
+      toast.success("Teammate added");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add teammate");
+    }
+  };
+
+  const handleRemoveTeammate = async (memberId: string) => {
+    if (!project) return;
+    try {
+      await axios.delete(`/api/collaboration/${project._id}/team/${memberId}`);
+      // Refresh project data to reflect the updated team
+      await fetchProject();
+      toast.success("Team member removed");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to remove team member");
+    }
+    setOpenDropdown(null);
+  };
+
+  const handleDelete = async () => {
+    if (!project) return;
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    try {
+      await axios.delete(`/api/collaboration/${project._id}`);
+      toast.success("Project deleted");
+      router.push("/project-collaboration");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete project");
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("Link copied");
+  };
+
+  // ── Loading & Error ────────────────────────────────────────────────────
   if (loading) return <LoadingSkeleton />;
-  if (!project) return <NotFound />;
+  if (error || !project) return <NotFound error={error} />;
 
   const statusInfo = statusMeta[project.status] || statusMeta["Open"];
   const spotsLeft = project.totalTeamSize - project.currentTeamMembers.length;
@@ -262,7 +359,9 @@ export default function ProjectDetailPage() {
       <div className="sticky top-0 z-30 bg-white border-b border-[#E8EDF2] px-6 py-3">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <Link href="/project-collaboration">
-            <button className="flex items-center gap-1.5 text-sm text-[#64748B] hover:text-[#0D1B2A]"><ArrowLeft className="w-4 h-4" /> Back</button>
+            <button className="flex items-center gap-1.5 text-sm text-[#64748B] hover:text-[#0D1B2A]">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
           </Link>
           <div className="flex gap-2">
             <span className={`text-xs px-3 py-1 rounded-full border ${statusInfo.bg} ${statusInfo.text}`}>{project.status}</span>
@@ -337,21 +436,50 @@ export default function ProjectDetailPage() {
               </div>
             </div>
 
-            {/* Current team */}
+            {/* ── CURRENT TEAM with three‑dots ── */}
             <div className="bg-white border border-[#E8EDF2] rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-[#0D1B2A] mb-3">Current team</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {project.currentTeamMembers.map((m, idx) => (
-                  <div key={m._id} className="flex items-center gap-3 p-3 border border-[#E8EDF2] rounded-xl">
-                    <div className={`w-10 h-10 rounded-full ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-bold`}>
-                      {m.user.username.slice(0, 2).toUpperCase()}
+                {project.currentTeamMembers.map((m) => (
+                  <div
+                    key={m._id}
+                    className="flex items-center justify-between p-3 border border-[#E8EDF2] rounded-xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full  flex items-center justify-center font-bold`}>
+                        {m.user.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{m.user.username}</p>
+                        <p className="text-xs text-[#0EA472]">{m.roleAssigned}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{m.user.username}</p>
-                      <p className="text-xs text-[#0EA472]">{m.roleAssigned}</p>
-                    </div>
+
+                    {/* Three‑dots dropdown – only for leader */}
+                    {project.createdBy._id == currentUserId && m._id != currentUserId && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenDropdown(openDropdown === m._id ? null : m._id)}
+                          className="p-1 rounded-full hover:bg-gray-100"
+                        >
+                          <MoreVertical className="w-5 h-5 text-gray-500" />
+                        </button>
+                        {openDropdown === m._id && (
+                          <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                            <button
+                              onClick={() => handleRemoveTeammate(m.user._id)}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
+                            >
+                              Remove from team
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
+
+                {/* Empty spots (unchanged) */}
                 {Array.from({ length: Math.max(0, project.totalTeamSize - project.currentTeamMembers.length) }).map((_, i) => (
                   <div key={`empty-${i}`} className="flex items-center gap-3 p-3 border border-dashed border-[#E8EDF2] rounded-xl bg-gray-50">
                     <div className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">?</div>
@@ -364,7 +492,6 @@ export default function ProjectDetailPage() {
               </div>
             </div>
           </div>
-
           {/* Right sidebar */}
           <div className="space-y-5">
             {/* Leader card */}
@@ -415,33 +542,33 @@ export default function ProjectDetailPage() {
             </button>
 
             {/* Management actions (leader only) */}
-            {isLeader && (
+            {project.createdBy._id == currentUserId && (
               <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 space-y-2">
                 <h3 className="font-semibold text-[#0D1B2A] mb-2">Management</h3>
                 <button onClick={() => setShowAddMember(true)} className="w-full flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-sm text-[#0D1B2A] hover:bg-gray-50"><UserPlus className="w-4 h-4" /> Add team member</button>
                 <button onClick={() => setShowEdit(true)} className="w-full flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-sm text-[#0D1B2A] hover:bg-gray-50"><Edit3 className="w-4 h-4" /> Edit requirements</button>
-                <button className="w-full flex items-center gap-2 px-4 py-2 rounded-xl border border-red-200 text-sm text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /> Delete project</button>
+                <button onClick={handleDelete} className="w-full flex items-center gap-2 px-4 py-2 rounded-xl border border-red-200 text-sm text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /> Delete project</button>
               </div>
             )}
 
             {/* Share link */}
             <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5">
               <h3 className="font-semibold text-[#0D1B2A] mb-2">Share</h3>
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success("Link copied"); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-sm text-[#64748B] hover:bg-gray-50"><ExternalLink className="w-4 h-4" /> Copy link</button>
+              <button onClick={handleCopyLink} className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[#E8EDF2] text-sm text-[#64748B] hover:bg-gray-50"><ExternalLink className="w-4 h-4" /> Copy link</button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Modals */}
-      {showEdit && <EditModal project={project} onClose={() => setShowEdit(false)} onSave={data => setProject(p => p ? { ...p, ...data } : p)} />}
-      {showAddMember && <AddTeammateModal roles={project.rolesLookingFor} onClose={() => setShowAddMember(false)} onAdd={m => setProject(p => p ? { ...p, currentTeamMembers: [...p.currentTeamMembers, m] } : p)} />}
-      {showApply && <ApplyModal roles={project.rolesLookingFor} onClose={() => setShowApply(false)} />}
+      {showEdit && <EditModal project={project} onClose={() => setShowEdit(false)} onSave={handleEdit} />}
+      {showAddMember && <AddTeammateModal roles={project.rolesLookingFor} onClose={() => setShowAddMember(false)} onAdd={handleAddTeammate} />}
+      {showApply && <ApplyModal projectId={project._id} roles={project.rolesLookingFor} onClose={() => setShowApply(false)} />}
     </div>
   );
 }
 
-// ─── Loading & Error ───────────────────────────────────────────
+// ─── Loading & Error ──────────────────────────────────────────────────────
 function LoadingSkeleton() {
   return (
     <div className="bg-[#F8FAFB] min-h-screen p-6 animate-pulse">
@@ -457,12 +584,12 @@ function LoadingSkeleton() {
   );
 }
 
-function NotFound() {
+function NotFound({ error }: { error?: string | null }) {
   return (
     <div className="bg-[#F8FAFB] min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="text-4xl mb-3">🔍</div>
-        <h2 className="text-xl font-bold text-[#0D1B2A]">Project not found</h2>
+        <h2 className="text-xl font-bold text-[#0D1B2A]">{error || "Project not found"}</h2>
         <Link href="/project-collaboration" className="inline-block mt-4 px-5 py-2 rounded-xl bg-[#0D1B2A] text-white">← Back to projects</Link>
       </div>
     </div>

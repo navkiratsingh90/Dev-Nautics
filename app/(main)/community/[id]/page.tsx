@@ -196,14 +196,9 @@ export default function ChatPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 50);
-  };
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
 
   const fetchCommunity = async () => {
     const { data } = await axios.get(`/api/community/${communityId}`);
@@ -219,7 +214,7 @@ export default function ChatPage() {
       isMe: normalizeId(msg.senderId) === userId,
     }));
     setMessages(withMe);
-    scrollToBottom();
+    // scrollToBottom();
   };
 
   const loadAll = async () => {
@@ -323,10 +318,10 @@ export default function ChatPage() {
       formData.append("text", text);
       if (file) formData.append("file", file);
 
-      await axios.post("/api/messages", formData, {
+      const {data} = await axios.post("/api/messages", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      socket.emit("send-message", text);
+      socket.emit("send-message", data.message);
       setNewMessage("");  
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -358,9 +353,14 @@ export default function ChatPage() {
     socket.emit("join-community", communityId);
 
     socket.on("receive-message", (message) => {
-      console.log(message);
-      
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          ...message,
+          isMe: message.senderId?._id === userId,
+        },
+      ]);
+      // scrollToBottom()
     });
 
     socket.on("connect", () => {
@@ -378,7 +378,20 @@ export default function ChatPage() {
       socket.disconnect();
     };
   }, [communityId,userId]);
-
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages]);
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages]);
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#F8FAFB]">
@@ -397,82 +410,13 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-[#F8FAFB] font-sans">
-      {/* Sidebar */}
-      <div
-        className={`${
-          showSidebar ? "w-80" : "w-0"
-        } flex flex-col overflow-hidden border-r border-gray-200 bg-white transition-all`}
-      >
-        {showSidebar && (
-          <>
-            <div className="border-b border-gray-200 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-bold text-gray-900">Members</h2>
-                <button onClick={() => setShowSidebar(false)} className="text-gray-400 hover:text-gray-700">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-[#E8EDF2] p-3">
-                <Avatar name={community.communityName} emoji={community.file} />
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-gray-900">{community.communityName}</div>
-                  <div className="text-xs text-gray-500">{community.totalMembers} members</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="mb-3 text-xs font-semibold uppercase text-gray-500">Joined Members</div>
-              <div className="space-y-2">
-                {activeMembers.length === 0 ? (
-                  <div className="text-sm text-gray-500">No members found</div>
-                ) : (
-                  activeMembers.map((m, idx) => {
-                    const id = normalizeId(m);
-                    const name = typeof m === "string" ? "User" : m.username || "User";
-                    return (
-                      <div
-                        key={id || idx}
-                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
-                          {name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="truncate text-sm text-gray-700">{name}</div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 p-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-sm font-medium">
-                  {currentUser?.username?.slice(0, 2).toUpperCase() || "U"}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{currentUser?.username || "User"}</div>
-                  <div className="text-xs text-gray-500">Active now</div>
-                </div>
-                <button onClick={() => setMuted((v) => !v)} className="p-1 text-gray-500 hover:text-gray-700">
-                  {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
+      
       {/* Main chat */}
       <div className="flex flex-1 flex-col bg-white">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={() => router.back()} className="p-1 text-gray-500 hover:text-gray-700">
               <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button onClick={() => setShowSidebar((v) => !v)} className="p-1 text-gray-500 hover:text-gray-700">
-              <Menu className="h-5 w-5" />
             </button>
             <Avatar name={community.communityName} emoji={community.file} />
             <div>
@@ -483,12 +427,6 @@ export default function ChatPage() {
             </div>
           </div>
           <div className="flex gap-1">
-            <button className="p-2 text-gray-500 hover:text-gray-700">
-              <Phone className="h-4 w-4" />
-            </button>
-            <button className="p-2 text-gray-500 hover:text-gray-700">
-              <Video className="h-4 w-4" />
-            </button>
             <button onClick={() => setShowInfo((v) => !v)} className="p-2 text-gray-500 hover:text-gray-700">
               <Users className="h-4 w-4" />
             </button>
@@ -509,6 +447,7 @@ export default function ChatPage() {
             )}
 
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              <div ref={chatRef} />
               {messages.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
                   No messages yet. Start the conversation.
@@ -727,22 +666,13 @@ export default function ChatPage() {
                 {/* Mute/Pin/Leave actions */}
                 <div className="space-y-2">
                   <button
-                    onClick={() => setMuted((v) => !v)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-                    {muted ? "Unmute" : "Mute"}
-                  </button>
-                  <button className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <Pin className="h-4 w-4" /> Pin room
-                  </button>
-                  <button
                     onClick={handleLeave}
                     disabled={leaving}
                     className="flex w-full items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
                   >
                     <LogOut className="h-4 w-4" />
-                    {leaving ? "Leaving..." : "Leave room"}
+                    {/* {leaving ? "Leaving..." : "Leave room"} */}
+                    {community.createdBy._id == userId ? "Delete" : "Leave"}
                   </button>
                 </div>
               </div>
