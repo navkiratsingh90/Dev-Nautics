@@ -1,168 +1,206 @@
-import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import { ProjectTracker } from '@/models/ProjectTracker';
-import { getUserIdFromRequest } from '@/lib/auth';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import Workspace from "@/models/workspace-model";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
+// ─── GET: Fetch a single workspace ──────────────────────────────────
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { workspaceId: string } }
 ) {
   try {
-    const { projectId } = await params;
-    const userId = await getUserIdFromRequest(req);
+    await connectDb();
 
-    if (!projectId) {
+    const session = await auth();
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { msg: 'Project ID missing' },
-        { status: 400 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
-
-    await dbConnect();
-
-    const currProject = await ProjectTracker.findById(projectId);
-    if (!currProject) {
+    const {workspaceId} = await params
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
       return NextResponse.json(
-        { msg: 'Project not found' },
+        { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    const isMember = currProject.members.some(
-      (ele: any) => ele.user.toString() === userId.toString()
-    );
-    if (!isMember) {
+    const workspace = await Workspace.findById(workspaceId)
+      .populate("leader", "username email")
+      .populate("members.user", "username email")
+      .populate("tasks.assignedTo", "username email");
+
+    if (!workspace) {
       return NextResponse.json(
-        { msg: 'Access denied' },
+        { success: false, message: "Workspace not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check if user is a member or leader
+    const isMember = workspace.members.some(
+      (m: any) => m.user._id.toString() === currentUser._id.toString()
+    );
+    const isLeader = workspace.leader._id.toString() === currentUser._id.toString();
+
+    if (!isMember && !isLeader) {
+      return NextResponse.json(
+        { success: false, message: "Access denied" },
         { status: 403 }
       );
     }
 
-    // Filter user tasks
-    const userTasks = currProject.tasks.filter(
-      (task: any) => task.assignedTo.toString() === userId.toString()
+    // Calculate progress (timeline completed)
+    const totalTimelines = workspace.timeline?.length || 0;
+    const completedTimelines = workspace.timeline?.filter((t: any) => t.completed).length || 0;
+    const progress = totalTimelines > 0 ? Math.round((completedTimelines / totalTimelines) * 100) : 0;
+
+    // Get user's tasks
+    const userTasks = workspace.tasks.filter(
+      (task: any) => task.assignedTo?._id?.toString() === currentUser._id.toString()
     );
 
-    let progressMeter = 0;
-    let totalTimelinesCompleted = 0;
-
-    for (const time of currProject.timeline) {
-      if (time.completed) totalTimelinesCompleted++;
-    }
-
-    if (currProject.timeline.length > 0) {
-      progressMeter = totalTimelinesCompleted / currProject.timeline.length;
-    }
-
-    return NextResponse.json(
-      {
-        message: 'Project fetched successfully',
-        allTasks: userTasks,
-        members: currProject.members,
-        progressMeter,
-        project: currProject,
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...workspace.toObject(),
+        progress,
+        userTasks,
       },
-      { status: 200 }
-    );
+    });
   } catch (error: any) {
-    console.error(error);
+    console.error("GET WORKSPACE ERROR:", error);
     return NextResponse.json(
-      { msg: 'Internal server error' },
+      { success: false, message: "Internal Server Error" },
       { status: 500 }
     );
   }
 }
 
+// ─── PUT: Update workspace (leader only) ─────────────────────────────
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { workspaceId: string } }
+) {
+  try {
+    await connectDb();
+
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { workspaceId } = await params;
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return NextResponse.json(
+        { success: false, message: "Workspace not found" },
+        { status: 404 }
+      );
+    }
+
+    if (workspace.leader.toString() !== currentUser._id.toString()) {
+      return NextResponse.json(
+        { success: false, message: "Only the leader can update this workspace" },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+
+    // ✅ Update all fields that the frontend may send
+    if (body.githubLink !== undefined) workspace.githubLink = body.githubLink;
+    if (body.timeline !== undefined) workspace.timeline = body.timeline;
+    if (body.status !== undefined) workspace.status = body.status;
+    if (body.commits !== undefined) workspace.commits = body.commits;
+    if (body.calendarEvents !== undefined) workspace.calendarEvents = body.calendarEvents;
+    if (body.description !== undefined) workspace.description = body.description;
+    if (body.tags !== undefined) workspace.tags = body.tags;
+    // Add any other fields your frontend might update
+
+    await workspace.save();
+
+    // Populate before sending back
+    await workspace.populate("leader", "username email");
+    await workspace.populate("members.user", "username email");
+
+    return NextResponse.json({
+      success: true,
+      message: "Workspace updated successfully",
+      data: workspace,
+    });
+  } catch (error: any) {
+    console.error("UPDATE WORKSPACE ERROR:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+// ─── DELETE: Delete workspace (leader only) ─────────────────────────
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { workspaceId : string } }
 ) {
   try {
-    const { projectId } = await params;
-    const userId = await getUserIdFromRequest(req);
+    await connectDb();
 
-    if (!userId || !projectId) {
+    const session = await auth();
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { msg: 'Invalid credentials' },
-        { status: 400 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
-
-    await dbConnect();
-
-    const currProject = await ProjectTracker.findById(projectId);
-    if (!currProject) {
+    const {workspaceId} = await params
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
       return NextResponse.json(
-        { msg: 'Project not found' },
+        { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    // Only leader can delete project
-    if (currProject.leader.toString() !== userId.toString()) {
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
       return NextResponse.json(
-        { msg: 'Only leader can delete project' },
-        { status: 403 }
-      );
-    }
-
-    await ProjectTracker.findByIdAndDelete(projectId);
-
-    return NextResponse.json(
-      { msg: 'Project deleted successfully', projectId },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error(error);
-    return NextResponse.json(
-      { msg: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
-) {
-  try {
-    const { projectId } = await params;
-    const userId = await getUserIdFromRequest(req);
-    const { githubLink, lastCommitMessage, timeline, status } = await req.json();
-
-    await dbConnect();
-
-    const project = await ProjectTracker.findById(projectId);
-    if (!project) {
-      return NextResponse.json(
-        { msg: 'Project not found' },
+        { success: false, message: "Workspace not found" },
         { status: 404 }
       );
     }
 
-    if (project.leader.toString() !== userId.toString()) {
+    if (workspace.leader.toString() !== currentUser._id.toString()) {
       return NextResponse.json(
-        { msg: 'Only leader can update project' },
+        { success: false, message: "Only the leader can delete this workspace" },
         { status: 403 }
       );
     }
 
-    if (githubLink) project.githubLink = githubLink;
-    if (lastCommitMessage) project.lastCommitMessage = lastCommitMessage;
-    if (timeline) project.timeline = timeline;
-    if (status) project.status = status;
+    await Workspace.findByIdAndDelete(workspaceId);
 
-    const updated = await project.save();
-
-    return NextResponse.json(
-      { msg: 'Project updated', project: updated },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Workspace deleted successfully",
+    });
   } catch (error: any) {
-    console.error(error);
+    console.error("DELETE WORKSPACE ERROR:", error);
     return NextResponse.json(
-      { msg: 'Internal server error' },
+      { success: false, message: "Internal Server Error" },
       { status: 500 }
     );
   }

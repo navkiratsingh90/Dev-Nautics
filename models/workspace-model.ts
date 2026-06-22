@@ -1,51 +1,59 @@
 import mongoose from "mongoose";
 
-const taskSchema = new mongoose.Schema({
-  description: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+const taskSchema = new mongoose.Schema(
+  {
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-  priority: {
-    type: String,
-    enum: ["Low", "Medium", "High"],
-    default: "Low",
-  },
+    priority: {
+      type: String,
+      enum: ["Low", "Medium", "High"],
+      default: "Low",
+    },
 
-  assignedTo: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
 
-  status: {
-    type: String,
-    enum: ["Pending", "In Progress", "Completed"],
-    default: "Pending",
-  },
+    status: {
+      type: String,
+      enum: ["Pending", "In Progress", "Completed"],
+      default: "Pending",
+    },
 
-  dueDate: {
-    type: Date,
+    dueDate: {
+      type: Date,
+    },
   },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-const memberRoleSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
+const memberRoleSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-  role: {
-    type: String,
-    required: true,
-  },
+    role: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-  totalTasksCompleted: {
-    type: Number,
-    default: 0,
+    totalTasksCompleted: {
+      type: Number,
+      default: 0,
+    },
   },
-});
+  { _id: false }
+);
 
 const workspaceSchema = new mongoose.Schema(
   {
@@ -57,6 +65,7 @@ const workspaceSchema = new mongoose.Schema(
 
     description: {
       type: String,
+      trim: true,
     },
 
     leader: {
@@ -78,46 +87,86 @@ const workspaceSchema = new mongoose.Schema(
 
     timeline: [
       {
-        name: String,
-        completed: { type: Boolean, default: false },
+        _id: false,
+
+        name: {
+          type: String,
+          required: true,
+        },
+
+        completed: {
+          type: Boolean,
+          default: false,
+        },
+
+        completedAt: Date,
       },
     ],
 
     githubLink: {
       type: String,
+      trim: true,
     },
 
     commits: [
       {
+        _id: false,
+
         message: String,
-        date: { type: Date, default: Date.now },
+
+        author: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+
+        date: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
 
     status: {
       type: String,
-      enum: ["Active", "On Hold", "Completed", "Not Started"],
+      enum: ["Not Started", "Active", "On Hold", "Completed"],
       default: "Not Started",
     },
 
     calendarEvents: [
       {
-        googleEventId: String,
-        title: String,
+        title: {
+          type: String,
+          required: true,
+        },
+
         description: String,
-        startDate: Date,
-        endDate: Date,
+
+        startDate: {
+          type: Date,
+          required: true,
+        },
+
+        endDate: {
+          type: Date,
+          required: true,
+        },
+
         meetLink: String,
       },
     ],
+
     tags: {
       type: [String],
       default: [],
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-const Workspace = mongoose.models.Workspace || mongoose.model("Workspace", workspaceSchema);
+const Workspace =
+  mongoose.models.Workspace ||
+  mongoose.model("Workspace", workspaceSchema);
 
 export default Workspace;

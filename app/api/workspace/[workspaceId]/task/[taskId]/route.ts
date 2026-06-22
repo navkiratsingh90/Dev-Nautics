@@ -1,61 +1,150 @@
-import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import { ProjectTracker } from '@/models/ProjectTracker';
-import { getUserIdFromRequest } from '@/lib/auth';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import Workspace from "@/models/workspace-model";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function PATCH(
+// ─── PUT: Mark task as completed (task owner only) ──────────────────
+export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string; taskId: string }> }
+  { params }: { params: { workspaceId: string; taskId: string } }
 ) {
   try {
-    const { projectId, taskId } = await params;
-    const userId = await getUserIdFromRequest(req);
+    await connectDb();
 
-    await dbConnect();
-
-    const project = await ProjectTracker.findById(projectId);
-    if (!project) {
+    const session = await auth();
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { msg: 'Project not found' },
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+    const {workspaceId, taskId} = await params
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    const task = project.tasks.id(taskId);
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return NextResponse.json(
+        { success: false, message: "Workspace not found" },
+        { status: 404 }
+      );
+    }
+
+    const task = workspace.tasks.id(taskId);
     if (!task) {
       return NextResponse.json(
-        { msg: 'Task not found' },
+        { success: false, message: "Task not found" },
         { status: 404 }
       );
     }
 
-    if (task.assignedTo.toString() !== userId.toString()) {
+    // Only the assigned user or leader can complete the task
+    const isLeader = workspace.leader.toString() === currentUser._id.toString();
+    const isOwner = task.assignedTo?.toString() === currentUser._id.toString();
+
+    if (!isLeader && !isOwner) {
       return NextResponse.json(
-        { msg: 'You cannot modify others\' tasks' },
+        { success: false, message: "You cannot complete this task" },
         { status: 403 }
       );
     }
 
-    task.status = 'Completed';
+    task.status = "Completed";
 
-    // Increment member’s completed tasks count
-    const member = project.members.find(
-      (m: any) => m.user.toString() === userId.toString()
+    // Increment member's completed tasks count
+    const member = workspace.members.find(
+      (m: any) => m.user.toString() === task.assignedTo?.toString()
     );
     if (member) {
-      member.totalTasksCompleted = parseInt(member.totalTasksCompleted, 10) + 1;
+      member.totalTasksCompleted = (member.totalTasksCompleted || 0) + 1;
     }
 
-    await project.save();
+    await workspace.save();
 
-    return NextResponse.json(
-      { msg: 'Task marked as completed', task },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Task marked as completed",
+      data: task,
+    });
   } catch (error: any) {
-    console.error(error);
+    console.error("COMPLETE TASK ERROR:", error);
     return NextResponse.json(
-      { msg: 'Internal server error' },
+      { success: false, message: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+// ─── DELETE: Delete a task (leader or task owner) ──────────────────
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { workspaceId: string; taskId: string } }
+) {
+  try {
+    await connectDb();
+
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+    const {workspaceId, taskId} = await params
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return NextResponse.json(
+        { success: false, message: "Workspace not found" },
+        { status: 404 }
+      );
+    }
+
+    const task = workspace.tasks.id(taskId);
+    if (!task) {
+      return NextResponse.json(
+        { success: false, message: "Task not found" },
+        { status: 404 }
+      );
+    }
+
+    const isLeader = workspace.leader.toString() === currentUser._id.toString();
+    const isOwner = task.assignedTo?.toString() === currentUser._id.toString();
+
+    if (!isLeader && !isOwner) {
+      return NextResponse.json(
+        { success: false, message: "You cannot delete this task" },
+        { status: 403 }
+      );
+    }
+
+    workspace.tasks = workspace.tasks.filter(
+      (t: any) => t._id.toString() !== params.taskId
+    );
+
+    await workspace.save();
+
+    return NextResponse.json({
+      success: true,
+      message: "Task deleted successfully",
+    });
+  } catch (error: any) {
+    console.error("DELETE TASK ERROR:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal Server Error" },
       { status: 500 }
     );
   }

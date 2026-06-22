@@ -1,42 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import { ProjectTracker } from '@/models/ProjectTracker';
-import { getUserIdFromRequest } from '@/lib/auth';
+import { auth } from "@/auth";
+import connectDb from "@/lib/db";
+import Workspace from "@/models/workspace-model";
+import User from "@/models/user-model";
+import { NextRequest, NextResponse } from "next/server";
 
+// ─── GET: Get top 5 contributors for a workspace ──────────────────
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: { workspaceId: string } }
 ) {
   try {
-    const { projectId } = await params;
+    await connectDb();
 
-    await dbConnect();
-
-    const project = await ProjectTracker.findById(projectId).populate(
-      'members.user'
-    );
-    if (!project) {
+    const session = await auth();
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { msg: 'Project not found' },
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+    const {workspaceId} = await params
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    const sortedMembers = [...project.members].sort(
-      (a: any, b: any) => b.totalTasksCompleted - a.totalTasksCompleted
+    const workspace = await Workspace.findById(workspaceId)
+      .populate("members.user", "username email");
+
+    if (!workspace) {
+      return NextResponse.json(
+        { success: false, message: "Workspace not found" },
+        { status: 404 }
+      );
+    }
+
+    // Sort members by totalTasksCompleted (descending) and take top 5
+    const sorted = [...workspace.members].sort(
+      (a: any, b: any) => (b.totalTasksCompleted || 0) - (a.totalTasksCompleted || 0)
     );
 
-    return NextResponse.json(
-      {
-        msg: 'Top contributors fetched',
-        contributors: sortedMembers.slice(0, 5), // top 5
-      },
-      { status: 200 }
-    );
+    const topContributors = sorted.slice(0, 5);
+
+    return NextResponse.json({
+      success: true,
+      data: topContributors,
+    });
   } catch (error: any) {
-    console.error(error);
+    console.error("GET CONTRIBUTORS ERROR:", error);
     return NextResponse.json(
-      { msg: 'Internal server error' },
+      { success: false, message: "Internal Server Error" },
       { status: 500 }
     );
   }

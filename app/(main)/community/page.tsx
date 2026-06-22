@@ -497,7 +497,6 @@ export default function DiscussionsPage() {
             {[
               { key: "all", label: "All" },
               { key: "joined", label: `Joined (${joinedIds.size})` },
-              { key: "trending", label: "Trending" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -524,49 +523,12 @@ export default function DiscussionsPage() {
             />
           </div>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="rounded-lg border border-[#E8EDF2] bg-white px-3 py-2 text-sm"
-          >
-            <option value="online">By online</option>
-            <option value="members">By members</option>
-            <option value="newest">Newest</option>
-          </select>
-
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-1.5 rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm text-white hover:bg-[#1E3A5F]"
           >
             <Plus className="h-4 w-4" /> Create Room
           </button>
-        </div>
-
-        <div className="mx-auto mt-3 flex max-w-7xl gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setSelectedTopic(null)}
-            className={`shrink-0 rounded-full border px-3 py-1 text-xs ${
-              !selectedTopic
-                ? "border-[#0D1B2A] bg-[#0D1B2A] text-white"
-                : "border-[#E8EDF2] bg-white text-[#64748B] hover:bg-gray-50"
-            }`}
-          >
-            All topics
-          </button>
-
-          {[...new Set(discussions.flatMap((d) => d.topics || []))].map((t) => (
-            <button
-              key={t}
-              onClick={() => setSelectedTopic(selectedTopic === t ? null : t)}
-              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${
-                selectedTopic === t
-                  ? "border-[#0D1B2A] bg-[#0D1B2A] text-white"
-                  : "border-[#E8EDF2] bg-white text-[#64748B] hover:bg-gray-50"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -603,82 +565,6 @@ export default function DiscussionsPage() {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="border-t border-[#E8EDF2] bg-white py-12">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
-            <div>
-              <h2 className="mb-4 text-xl font-bold text-[#0D1B2A]">
-                🔥 Trending topics
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {[...new Set(discussions.flatMap((d) => d.topics || []))].map((t) => {
-                  const count = discussions.filter((d) =>
-                    (d.topics || []).includes(t)
-                  ).length;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        setSelectedTopic(t);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      className="rounded-full border border-[#E8EDF2] px-3 py-1.5 text-sm text-[#0D1B2A] hover:bg-gray-50"
-                    >
-                      {t}
-                      {count > 0 && (
-                        <span className="ml-1 text-xs text-[#64748B]">
-                          ({count})
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="mb-4 text-xl font-bold text-[#0D1B2A]">
-                ⚡ Most active
-              </h2>
-              <div className="space-y-3">
-                {[...discussions]
-                  .sort((a, b) => b.onlineMembers - a.onlineMembers)
-                  .slice(0, 5)
-                  .map((d, i) => (
-                    <div
-                      key={d._id}
-                      className="flex items-center gap-3 rounded-xl border border-[#E8EDF2] p-3"
-                    >
-                      <span className="w-6 text-center font-medium text-gray-500">
-                        {i + 1}
-                      </span>
-                      <span className="text-xl">
-                        {d.file && d.file.startsWith("http") ? "🖼️" : "💬"}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-[#0D1B2A]">
-                          {d.communityName}
-                        </p>
-                        <p className="text-xs text-[#64748B]">
-                          {d.onlineMembers} online
-                        </p>
-                      </div>
-                      {!joinedIds.has(d._id) && (
-                        <button
-                          onClick={() => handleJoin(d._id)}
-                          className="rounded-full border border-[#E8EDF2] px-3 py-1 text-xs text-[#0D1B2A] hover:bg-gray-50"
-                        >
-                          Join
-                        </button>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {showModal && (
