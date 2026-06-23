@@ -1,123 +1,149 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
-import { getUserIdFromRequest } from '@/lib/auth';
-import User from '@/models/user-model';
-import Activity from '@/models/activity-model';
-import Challenge from '@/models/challenge-model';
-import Discussion from '@/models/discussion-model';
-import ProjectFlow from '@/models/project-flow-model'; // Adjust model name
+// app/api/analytics/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import connectDb from "@/lib/db";
+import { auth } from "@/auth";
+import User from "@/models/user-model";
+import Activity from "@/models/feed-model";
+import Challenge from "@/models/question-model";
+import Community from "@/models/community-model";
+import Workspace from "@/models/workspace-model";
 
 export async function GET(req: NextRequest) {
   try {
-    await dbConnect();
-    const userId = await getUserIdFromRequest(req);
-    if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
+    await connectDb();
 
-    const user = await User.findById(userId)
-      .populate('activityPosted')
-      .populate('challengesAttended')
-      .populate('activeProjects')
-      .populate('connectedUsers')
-      .lean();
-
-    if (!user) {
-      return NextResponse.json({ message: 'User not found' }, { status: 404 });
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
-    // Activities
+    const user = await User.findOne({ email: session.user.email });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const userId = user._id;
+
+    // ─── Activities ────────────────────────────────────────────────────────
     const totalActivities = await Activity.countDocuments({ createdBy: userId });
-    const totalLikesReceived = await Activity.aggregate([
-      { $match: { createdBy: user._id } },
-      { $project: { totalLikes: { $size: '$likes' } } },
-      { $group: { _id: null, likes: { $sum: '$totalLikes' } } },
+
+    const likesAgg = await Activity.aggregate([
+      { $match: { createdBy: userId } },
+      { $project: { likesCount: { $size: "$likes" } } },
+      { $group: { _id: null, total: { $sum: "$likesCount" } } },
     ]);
-    const totalCommentsReceived = await Activity.aggregate([
-      { $match: { createdBy: user._id } },
-      { $project: { totalComments: { $size: '$comments' } } },
-      { $group: { _id: null, comments: { $sum: '$totalComments' } } },
+    const totalLikes = likesAgg.length ? likesAgg[0].total : 0;
+
+    const commentsAgg = await Activity.aggregate([
+      { $match: { createdBy: userId } },
+      { $project: { commentsCount: { $size: "$comments" } } },
+      { $group: { _id: null, total: { $sum: "$commentsCount" } } },
     ]);
+    const totalComments = commentsAgg.length ? commentsAgg[0].total : 0;
 
-    // Challenges
-    const totalChallenges = await Challenge.countDocuments({ 'leaderboard.userId': userId });
-    const totalSolvedChallenges = await Challenge.countDocuments({ successfulSubmissions: userId });
-
-    // Projects
-    const activeProjects = await ProjectFlow.find({ 'members.user': userId });
-    let totalTasksAssigned = 0;
-    let completedTasks = 0;
-    activeProjects.forEach(project => {
-      totalTasksAssigned += project.tasks.filter(
-        (t: any) => t.assignedTo?.toString() === userId.toString()
-      ).length;
-      completedTasks += project.tasks.filter(
-        (t: any) =>
-          t.assignedTo?.toString() === userId.toString() && t.status === 'Completed'
-      ).length;
-    });
-
-    // Discussions
-    const totalDiscussionsJoined = await Discussion.countDocuments({ joinedMembers: userId });
-    const totalPendingDiscussionRequests = await Discussion.countDocuments({ 'pendingRequests.username': userId });
-
-    // Timeline data
     const activityTimeline = await Activity.aggregate([
-      { $match: { createdBy: user._id } },
+      { $match: { createdBy: userId } },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           count: { $sum: 1 },
         },
       },
       { $sort: { _id: 1 } },
     ]);
 
+    // ─── Challenges ──────────────────────────────────────────────────────
+    // Total participated: user appears in any leaderboard
+    const totalParticipated = await Challenge.countDocuments({
+      "leaderboard.userId": userId,
+    });
+
+    // Solved: user appears in successfulSubmissions array
+    const solved = await Challenge.countDocuments({
+      successfulSubmissions: userId,
+    });
+
+    // Challenge timeline: daily points from leaderboard
     const challengeTimeline = await Challenge.aggregate([
-      { $match: { 'leaderboard.userId': userId } },
-      { $unwind: '$leaderboard' },
-      { $match: { 'leaderboard.userId': userId } },
+      { $match: { "leaderboard.userId": userId } },
+      { $unwind: "$leaderboard" },
+      { $match: { "leaderboard.userId": userId } },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$leaderboard.submittedAt' } },
-          score: { $sum: '$leaderboard.score' },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$leaderboard.submittedAt" } },
+          totalScore: { $sum: "$leaderboard.score" },
         },
       },
       { $sort: { _id: 1 } },
     ]);
 
+    // ─── Projects (Workspaces) ──────────────────────────────────────────
+    const activeProjects = await Workspace.find({ "members.user": userId });
+
+    let tasksAssigned = 0;
+    let tasksCompleted = 0;
+    activeProjects.forEach((project) => {
+      // project.tasks is an array of task subdocuments
+      const assigned = project.tasks.filter(
+        (t: any) => t.assignedTo?.toString() === userId.toString()
+      );
+      tasksAssigned += assigned.length;
+      tasksCompleted += assigned.filter((t: any) => t.status === "Completed").length;
+    });
+
+    // ─── Discussions (Communities) ──────────────────────────────────────
+    const joinedDiscussions = await Community.countDocuments({
+      joinedMembers: userId,
+    });
+    const pendingRequests = await Community.countDocuments({
+      pendingRequests: userId,
+    });
+
+    // ─── Response ────────────────────────────────────────────────────────
     return NextResponse.json({
+      success: true,
       userInfo: {
         username: user.username,
         email: user.email,
-        totalPoints: user.totalPoints,
-        connections: user.connectedUsers.length,
+        totalPoints: user.totalPoints || 0,
+        connections: user.connectedUsers?.length || 0,
       },
       analytics: {
         activities: {
           total: totalActivities,
-          likes: totalLikesReceived[0]?.likes || 0,
-          comments: totalCommentsReceived[0]?.comments || 0,
+          likes: totalLikes,
+          comments: totalComments,
           timeline: activityTimeline,
         },
         challenges: {
-          totalParticipated: totalChallenges,
-          solved: totalSolvedChallenges,
+          totalParticipated,
+          solved,
           timeline: challengeTimeline,
-          totalPointsScored: user.totalPoints,
+          totalPointsScored: user.totalPoints || 0,
         },
         projects: {
           total: activeProjects.length,
-          tasksAssigned: totalTasksAssigned,
-          tasksCompleted: completedTasks,
+          tasksAssigned,
+          tasksCompleted,
         },
         discussions: {
-          joined: totalDiscussionsJoined,
-          pendingRequests: totalPendingDiscussionRequests,
+          joined: joinedDiscussions,
+          pendingRequests,
         },
       },
-      message: 'User analytics fetched successfully',
+      message: "User analytics fetched successfully",
     });
-  } catch (error) {
-    console.error('Error in getUserAnalytics:', error);
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  } catch (error: any) {
+    console.error("Analytics API error:", error);
+    return NextResponse.json(
+      { success: false, message: error.message || "Internal server error" },
+      { status: 500 }
+    );
   }
 }

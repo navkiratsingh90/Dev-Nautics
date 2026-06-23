@@ -1,3 +1,4 @@
+// app/community/[id]/page.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -5,31 +6,16 @@ import { useParams, useRouter } from "next/navigation";
 import { useAppSelector } from "@/redux/hooks";
 import axios from "axios";
 import { toast } from "sonner";
-import {
-  Send,
-  Paperclip,
-  Phone,
-  Video,
-  Users,
-  X,
-  Check,
-  CheckCheck,
-  File,
-  Smile,
-  ChevronLeft,
-  Hash,
-  Bell,
-  BellOff,
-  LogOut,
-  Copy,
-  Download,
-  Menu,
-  Pin,
-  MoreVertical,
-} from "lucide-react";
+import { Hash } from "lucide-react";
 import { socket } from "@/lib/socket";
 
-type MemberRef ={ _id?: string; username?: string };
+import { ChatHeader } from "@/components/ChatHeader";
+import { RoomInfoPanel } from "@/components/RoomInfoPanel";
+import { MessageInput } from "@/components/MessageInput";
+import { MessageBubble } from "@/components/MessageBubble";
+
+// ─── Types ──────────────────────────────────────────────────────────────
+type MemberRef = { _id?: string; username?: string };
 
 interface Message {
   _id: string;
@@ -68,111 +54,13 @@ interface Community {
   updatedAt: string;
 }
 
-const EMOJIS = ["😀", "😂", "🔥", "🎉", "👍", "❤️", "🚀", "✅"];
-
 function normalizeId(value: MemberRef | undefined | null): string {
   if (!value) return "";
   if (typeof value === "string") return value;
   return value._id || "";
 }
 
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
-
-function getSenderName(sender: MemberRef) {
-  if (typeof sender === "string") return "User";
-  return sender.username || "User";
-}
-
-function Avatar({ name, emoji }: { name: string; emoji?: string | null }) {
-  if (emoji && typeof emoji === "string" && emoji.startsWith("http")) {
-    return (
-      <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
-        <img src={emoji} alt={name} className="h-full w-full object-cover" />
-      </div>
-    );
-  }
-  if (emoji) {
-    return (
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-xl">
-        {emoji}
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-200 font-medium text-gray-700">
-      {name.slice(0, 2).toUpperCase()}
-    </div>
-  );
-}
-
-function MessageBubble({ msg, showSender, onCopy }: { msg: Message; showSender: boolean; onCopy: (t: string) => void }) {
-  const senderName = getSenderName(msg.senderId);
-
-  return (
-    <div className={`flex gap-2 ${msg.isMe ? "flex-row-reverse" : "flex-row"}`}>
-      {!msg.isMe && <Avatar name={senderName} />}
-      <div className={`max-w-[75%] ${msg.isMe ? "items-end" : "items-start"}`}>
-        {!msg.isMe && showSender && (
-          <div className="mb-1 ml-1 text-xs font-medium text-[#0EA472]">{senderName}</div>
-        )}
-        <div className="flex items-end gap-1">
-          {msg.isMe && (
-            <button onClick={() => onCopy(msg.text)} className="text-gray-400 hover:text-gray-600" type="button">
-              <Copy className="h-3 w-3" />
-            </button>
-          )}
-          <div
-            className={`rounded-2xl px-3 py-2 ${
-              msg.isMe
-                ? "rounded-br-sm bg-[#0D1B2A] text-white"
-                : "rounded-bl-sm border border-gray-200 bg-white text-gray-800"
-            }`}
-          >
-            {msg.type === "file" && (msg.fileMeta?.url || msg.file) ? (
-              <div className="flex items-center gap-2">
-                <File className="h-4 w-4 text-gray-500" />
-                <div>
-                  <div className="text-sm font-medium">{msg.fileMeta?.name || "Attachment"}</div>
-                  <div className={`text-xs ${msg.isMe ? "text-white/60" : "text-gray-400"}`}>
-                    {msg.fileMeta?.size ? fmtSize(msg.fileMeta.size) : "File"}
-                  </div>
-                </div>
-                <a
-                  href={msg.fileMeta?.url || msg.file || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              </div>
-            ) : (
-              <p className="whitespace-pre-wrap break-words text-sm">{msg.text}</p>
-            )}
-            <div className={`mt-1 flex justify-end gap-1 text-[10px] ${msg.isMe ? "text-white/50" : "text-gray-400"}`}>
-              <span>{fmtTime(msg.createdAt)}</span>
-              {msg.isMe && (msg.isRead ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}
-            </div>
-          </div>
-          {!msg.isMe && (
-            <button onClick={() => onCopy(msg.text)} className="text-gray-400 hover:text-gray-600" type="button">
-              <Copy className="h-3 w-3" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ─── Main Page ──────────────────────────────────────────────────────────
 export default function ChatPage() {
   const router = useRouter();
   const params = useParams();
@@ -190,16 +78,12 @@ export default function ChatPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const [showInfo, setShowInfo] = useState(false);
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
+  // ─── Data fetching ──────────────────────────────────────────────────
   const fetchCommunity = async () => {
     const { data } = await axios.get(`/api/community/${communityId}`);
     setCommunity(data.community || null);
@@ -214,7 +98,6 @@ export default function ChatPage() {
       isMe: normalizeId(msg.senderId) === userId,
     }));
     setMessages(withMe);
-    // scrollToBottom();
   };
 
   const loadAll = async () => {
@@ -233,40 +116,49 @@ export default function ChatPage() {
     loadAll();
   }, [communityId, userId]);
 
+  // ─── Socket ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    socket.connect();
+
+    socket.emit("join-community", communityId);
+
+    socket.on("receive-message", (message) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          ...message,
+          isMe: message.senderId?._id === userId,
+        },
+      ]);
+    });
+
+    socket.on("connect", () => {
+      console.log("🟢 Connected:", socket.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.log("🔴 Connection error:", err.message);
+    });
+
+    return () => {
+      socket.off("receive-message");
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.disconnect();
+    };
+  }, [communityId, userId]);
+
+  // ─── Auto-scroll ────────────────────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages]);
+
+  // ─── Handlers ──────────────────────────────────────────────────────
   const isJoined = community?.joinedMembers?.some((m) => normalizeId(m) === userId) ?? false;
-  const activeMembers = community?.joinedMembers || [];
-  const creatorId = normalizeId(community?.createdBy);
-  const isCreator = creatorId === userId;
-
-  const makeAdmin = async (memberId: string) => {
-    if (!communityId) return;
-    try {
-      const { data } = await axios.post(`/api/community/${communityId}/admin`, { userIdToMakeAdmin: memberId });
-      toast.success(data.message || "Admin added");
-      setCommunity((prev : any) => {
-        if (!prev) return prev;
-        const newAdmins = [...(prev.admins || []), memberId];
-        return { ...prev, admins: newAdmins };
-      });
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to make admin");
-    }
-  };
-
-  const removeAdmin = async (memberId: string) => {
-    if (!communityId) return;
-    try {
-      const { data } = await axios.post(`/api/community/${communityId}/admin`, {  userIdToMakeAdmin: memberId  });
-      toast.success(data.message || "Admin removed");
-      setCommunity((prev) => {
-        if (!prev) return prev;
-        const newAdmins = (prev.admins || []).filter((id) => normalizeId(id) !== memberId);
-        return { ...prev, admins: newAdmins };
-      });
-    } catch (error: any) {
-      console.error(error.response?.data?.message );
-    }
-  };
+  const isCreator = normalizeId(community?.createdBy) === userId;
 
   const handleJoin = async () => {
     if (!communityId) return;
@@ -299,8 +191,7 @@ export default function ChatPage() {
       setLeaving(false);
     }
   };
-  console.log(community?.createdBy._id , userId);
-  
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isJoined) {
@@ -318,15 +209,12 @@ export default function ChatPage() {
       formData.append("text", text);
       if (file) formData.append("file", file);
 
-      const {data} = await axios.post("/api/messages", formData, {
+      const { data } = await axios.post("/api/messages", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       socket.emit("send-message", data.message);
-      setNewMessage("");  
+      setNewMessage("");
       setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setShowEmoji(false);
-      // await fetchMessages();/
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to send message");
     } finally {
@@ -334,9 +222,34 @@ export default function ChatPage() {
     }
   };
 
-  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setSelectedFile(file);
+  const makeAdmin = async (memberId: string) => {
+    if (!communityId) return;
+    try {
+      const { data } = await axios.post(`/api/community/${communityId}/admin`, { userIdToMakeAdmin: memberId });
+      toast.success(data.message || "Admin added");
+      setCommunity((prev) => {
+        if (!prev) return prev;
+        const newAdmins = [...(prev.admins || []), { _id: memberId }];
+        return { ...prev, admins: newAdmins };
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to make admin");
+    }
+  };
+
+  const removeAdmin = async (memberId: string) => {
+    if (!communityId) return;
+    try {
+      const { data } = await axios.post(`/api/community/${communityId}/admin`, { userIdToMakeAdmin: memberId });
+      toast.success(data.message || "Admin removed");
+      setCommunity((prev) => {
+        if (!prev) return prev;
+        const newAdmins = (prev.admins || []).filter((a) => normalizeId(a) !== memberId);
+        return { ...prev, admins: newAdmins };
+      });
+    } catch (error: any) {
+      console.error(error.response?.data?.message);
+    }
   };
 
   const copyMessage = async (text: string) => {
@@ -347,51 +260,8 @@ export default function ChatPage() {
       toast.error("Copy failed");
     }
   };
-  useEffect(() => {
-    socket.connect();
 
-    socket.emit("join-community", communityId);
-
-    socket.on("receive-message", (message) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          ...message,
-          isMe: message.senderId?._id === userId,
-        },
-      ]);
-      // scrollToBottom()
-    });
-
-    socket.on("connect", () => {
-      console.log("🟢 Connected:", socket.id);
-    });
-
-    socket.on("connect_error", (err) => {
-      console.log("🔴 Connection error:", err.message);
-    });
-
-    return () => {
-      socket.off("receive-message");
-      socket.off("connect");
-      socket.off("connect_error");
-      socket.disconnect();
-    };
-  }, [communityId,userId]);
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [messages]);
-  useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTo({
-        top: chatRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [messages]);
+  // ─── Loading / Error ─────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#F8FAFB]">
@@ -408,30 +278,15 @@ export default function ChatPage() {
     );
   }
 
+  // ─── Render ─────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-[#F8FAFB] font-sans">
-      
-      {/* Main chat */}
       <div className="flex flex-1 flex-col bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-1 text-gray-500 hover:text-gray-700">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <Avatar name={community.communityName} emoji={community.file} />
-            <div>
-              <h2 className="font-semibold text-gray-900">{community.communityName}</h2>
-              <div className="text-xs text-gray-500">
-                {community.onlineMembers} online · {community.totalMembers} members
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            <button onClick={() => setShowInfo((v) => !v)} className="p-2 text-gray-500 hover:text-gray-700">
-              <Users className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <ChatHeader
+          community={community}
+          onBack={() => router.back()}
+          onToggleInfo={() => setShowInfo((v) => !v)}
+        />
 
         <div className="flex flex-1 overflow-hidden">
           <div className="flex flex-1 flex-col">
@@ -446,8 +301,7 @@ export default function ChatPage() {
               </div>
             )}
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              <div ref={chatRef} />
+            <div className="flex-1 space-y-3 overflow-y-auto p-4" ref={chatRef}>
               {messages.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
                   No messages yet. Start the conversation.
@@ -464,219 +318,32 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-gray-200 p-3">
-              {showEmoji && (
-                <div className="mb-2 flex gap-2 rounded-lg border border-gray-200 p-2">
-                  {EMOJIS.map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      onClick={() => setNewMessage((prev) => prev + e)}
-                      className="rounded p-1 text-xl hover:bg-gray-100"
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {selectedFile && (
-                <div className="mb-2 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-                  <span className="truncate">{selectedFile.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-
-              {!isJoined ? (
-                <div className="flex items-center justify-between rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
-                  <p className="text-sm text-yellow-800">Join this community to send messages.</p>
-                  <button
-                    onClick={handleJoin}
-                    disabled={joining}
-                    className="rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm text-white hover:bg-[#1E3A5F] disabled:opacity-60"
-                  >
-                    {joining ? "Joining..." : "Join"}
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFilePick}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-500 hover:text-gray-700"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmoji((v) => !v)}
-                    className="p-2 text-gray-500 hover:text-gray-700"
-                  >
-                    <Smile className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder={`Message ${community.communityName}`}
-                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#0EA472]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || (!newMessage.trim() && !selectedFile)}
-                    className="rounded-lg bg-[#0D1B2A] p-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLeave}
-                    disabled={leaving}
-                    className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
-                    title="Leave room"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                </form>
-              )}
-            </div>
+            <MessageInput
+              isJoined={isJoined}
+              communityName={community.communityName}
+              newMessage={newMessage}
+              setNewMessage={setNewMessage}
+              onSend={handleSendMessage}
+              onJoin={handleJoin}
+              onLeave={handleLeave}
+              joining={joining}
+              leaving={leaving}
+              sending={sending}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
+            />
           </div>
 
-          {/* Room Info Panel with Members and Admin Management */}
           {showInfo && (
-            <div className="flex w-72 flex-col overflow-y-auto border-l border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between border-b border-gray-200 p-4">
-                <h3 className="font-semibold text-gray-900">Room Info</h3>
-                <button onClick={() => setShowInfo(false)} className="text-gray-500 hover:text-gray-700">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="p-4 space-y-4">
-                {/* Community details */}
-                <div className="text-center">
-                  <div className="mb-2 text-4xl">
-                    {community.file && community.file.startsWith("http") ? "🖼️" : community.file || "💬"}
-                  </div>
-                  <h4 className="font-bold text-gray-900">{community.communityName}</h4>
-                  <div className="mt-1 text-xs text-gray-500">
-                    {community.onlineMembers} online · {community.totalMembers} members
-                  </div>
-                </div>
-
-                {community.about && (
-                  <div>
-                    <div className="mb-1 text-xs font-semibold uppercase text-gray-500">About</div>
-                    <p className="text-sm text-gray-700">{community.about}</p>
-                  </div>
-                )}
-
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase text-gray-500">Topics</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {community.topics.map((t) => (
-                      <span key={t} className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Members list with admin controls */}
-                <div>
-                  <div className="mb-2 text-xs font-semibold uppercase text-gray-500">Members</div>
-                  <div className="space-y-2">
-                    {activeMembers.map((m) => {
-                      const id = normalizeId(m);
-                      const name = typeof m === "string" ? "User" : m.username || "User";
-                      const isAdmin = (community.admins || []).some((a) => normalizeId(a) === id);
-                      const isCreator = id === creatorId;
-
-                      return (
-                        <div key={id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
-                              {name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{name}</div>
-                              <div className="text-xs text-gray-500">
-                                {isCreator ? "Creator" : isAdmin ? "Admin" : "Member"}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Dropdown for creator only */}
-                          {community.createdBy._id?.toString() == userId.toString() && m._id != userId && (
-                            <div className="relative">
-                              <button
-                                onClick={() => setDropdownOpen(dropdownOpen === id ? null : id)}
-                                className="p-1 text-gray-400 hover:text-gray-600"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
-                              {dropdownOpen === id && (
-                                <div className="absolute right-0 mt-1 w-36 rounded-md border border-gray-200 bg-white shadow-md z-10">
-                                  {isAdmin ? (
-                                    <button
-                                      onClick={() => {
-                                        removeAdmin(id);
-                                        setDropdownOpen(null);
-                                      }}
-                                      className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                    >
-                                      Remove Admin
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => {
-                                        makeAdmin(id);
-                                        setDropdownOpen(null);
-                                      }}
-                                      className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                    >
-                                      Make Admin
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Mute/Pin/Leave actions */}
-                <div className="space-y-2">
-                  <button
-                    onClick={handleLeave}
-                    disabled={leaving}
-                    className="flex w-full items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {/* {leaving ? "Leaving..." : "Leave room"} */}
-                    {community.createdBy._id == userId ? "Delete" : "Leave"}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <RoomInfoPanel
+              community={community}
+              userId={userId}
+              onClose={() => setShowInfo(false)}
+              onLeave={handleLeave}
+              onMakeAdmin={makeAdmin}
+              onRemoveAdmin={removeAdmin}
+              leaving={leaving}
+            />
           )}
         </div>
       </div>

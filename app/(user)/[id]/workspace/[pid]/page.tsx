@@ -10,10 +10,10 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, X,
   CheckCircle, ListTodo, UserCheck,
   CalendarDays, LayoutDashboard, Github,
-  Users,
 } from "lucide-react";
 
-// ─── Types (aligned with the Mongoose schema) ──────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
+
 interface Task {
   _id?: string;
   description: string;
@@ -69,7 +69,16 @@ interface Workspace {
   updatedAt: string;
 }
 
-// ─── Status / Priority styles ────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+// Returns the string ID from a user field that could be a string or object
+const getId = (user: { _id: string } | string): string =>
+  typeof user === "string" ? user : user._id;
+
+// Returns the display name from a user field
+const getName = (user: { _id: string; username: string } | string): string =>
+  typeof user === "string" ? "User" : user.username ?? "Unknown";
+
 const statusClass = (s: string) => {
   if (s === "Completed") return "bg-green-100 text-green-700";
   if (s === "In Progress") return "bg-blue-100 text-blue-700";
@@ -82,14 +91,31 @@ const priorityClass = (p: string) => {
   return "bg-green-100 text-green-700";
 };
 
-// ─── Simple Modal ────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+// ── Modal ──────────────────────────────────────────────────────────────────
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -97,7 +123,19 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────────────────
+
+type ModalType = "task" | "member" | "event" | "commit";
+type Tab = "overview" | "tasks" | "team" | "calendar";
+
+// Default form values when opening each modal
+const defaultForms = {
+  task: { description: "", priority: "Low" as const, assignedTo: "", dueDate: "", status: "Pending" as const },
+  member: { username: "", role: "" },
+  event: { title: "", description: "", startDate: "", endDate: "", meetLink: "" },
+  commit: { message: "" },
+};
+
 export default function ProjectTrackerPage() {
   const router = useRouter();
   const params = useParams();
@@ -109,17 +147,19 @@ export default function ProjectTrackerPage() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
 
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "team" | "calendar">("overview");
+  // Single modal state object — type tells us which modal is open
+  const [modal, setModal] = useState<{ type: ModalType; item?: any } | null>(null);
 
-  // Modal state
-  const [modal, setModal] = useState<{ type: "task" | "member" | "event" | "commit"; item?: any } | null>(null);
-  const [taskForm, setTaskForm] = useState<Partial<Task>>({});
-  const [memberForm, setMemberForm] = useState<Partial<{ username: string; role: string }>>({});
-  const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>({});
-  const [commitForm, setCommitForm] = useState<{ message: string }>({ message: "" });
+  // Form states (only one is "active" at a time depending on modal.type)
+  const [taskForm, setTaskForm] = useState<typeof defaultForms.task>(defaultForms.task);
+  const [memberForm, setMemberForm] = useState(defaultForms.member);
+  const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>(defaultForms.event);
+  const [commitForm, setCommitForm] = useState(defaultForms.commit);
 
-  // ── Fetch workspace ────────────────────────────────────────────────────
+  // ── API helpers ──────────────────────────────────────────────────────────
+
   const fetchWorkspace = async () => {
     if (!workspaceId) {
       setError("Workspace ID is missing");
@@ -129,11 +169,8 @@ export default function ProjectTrackerPage() {
     try {
       setLoading(true);
       const { data } = await axios.get(`/api/workspace/${workspaceId}`);
-      if (data.success) {
-        setWorkspace(data.data);
-      } else {
-        setError(data.message || "Failed to load workspace");
-      }
+      if (data.success) setWorkspace(data.data);
+      else setError(data.message || "Failed to load workspace");
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load workspace");
     } finally {
@@ -141,18 +178,31 @@ export default function ProjectTrackerPage() {
     }
   };
 
+  // A generic PUT that patches the workspace and refreshes local state
+  const patchWorkspace = async (updates: Partial<Workspace>, successMsg = "Updated") => {
+    try {
+      const { data } = await axios.put(`/api/workspace/${workspaceId}`, updates);
+      if (data.success) {
+        await fetchWorkspace();
+        toast.success(successMsg);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
+  };
+
   useEffect(() => {
     fetchWorkspace();
   }, [workspaceId]);
 
-  // ── Permissions ──────────────────────────────────────────────────────
+  // ── Permission check ─────────────────────────────────────────────────────
+
   const isLeader = workspace
-    ? (typeof workspace.leader === "string"
-        ? workspace.leader
-        : workspace.leader._id) === currentUserId
+    ? getId(workspace.leader) === currentUserId
     : false;
 
-  // ── Task handlers ─────────────────────────────────────────────────────
+  // ── Task handlers ────────────────────────────────────────────────────────
+
   const addTask = async (taskData: Omit<Task, "_id" | "createdAt" | "updatedAt">) => {
     try {
       const { data } = await axios.post(`/api/workspace/${workspaceId}/task`, taskData);
@@ -178,7 +228,6 @@ export default function ProjectTrackerPage() {
   };
 
   const deleteTask = async (taskId: string) => {
-    if (!window.confirm("Delete this task?")) return;
     try {
       const { data } = await axios.delete(`/api/workspace/${workspaceId}/task/${taskId}`);
       if (data.success) {
@@ -190,7 +239,8 @@ export default function ProjectTrackerPage() {
     }
   };
 
-  // ── Member handlers ──────────────────────────────────────────────────
+  // ── Member handlers ──────────────────────────────────────────────────────
+
   const addMember = async (username: string, role: string) => {
     try {
       const { data } = await axios.post(`/api/workspace/${workspaceId}/members`, {
@@ -217,158 +267,78 @@ export default function ProjectTrackerPage() {
     }
   };
 
-  // ── Event handlers ──────────────────────────────────────────────────
-  const addEvent = async (eventData: Partial<CalendarEvent>) => {
-    try {
-      const updatedEvents = [...(workspace?.calendarEvents || []), eventData];
-      const { data } = await axios.put(`/api/workspace/${workspaceId}`, {
-        calendarEvents: updatedEvents,
-      });
-      if (data.success) {
-        await fetchWorkspace();
-        toast.success("Event added");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to add event");
-    }
-  };
+  // ── Event handlers ───────────────────────────────────────────────────────
 
-  const deleteEvent = async (eventId: string) => {
+  const addEvent = (eventData: Partial<CalendarEvent>) =>
+    patchWorkspace(
+      { calendarEvents: [...(workspace?.calendarEvents || []), eventData as CalendarEvent] },
+      "Event added"
+    );
+
+  const deleteEvent = (eventId: string) => {
     if (!window.confirm("Delete this event?")) return;
-    const updatedEvents = (workspace?.calendarEvents || []).filter((e) => e._id !== eventId);
-    try {
-      const { data } = await axios.put(`/api/workspace/${workspaceId}`, {
-        calendarEvents: updatedEvents,
-      });
-      if (data.success) {
-        await fetchWorkspace();
-        toast.success("Event deleted");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to delete event");
-    }
+    patchWorkspace(
+      { calendarEvents: (workspace?.calendarEvents || []).filter((e) => e._id !== eventId) },
+      "Event deleted"
+    );
   };
 
-  // ── Commit handler ──────────────────────────────────────────────────
-  const addCommit = async (message: string) => {
-    try {
-      const newCommit = {
-        message,
-        author: currentUserId || null,
-        date: new Date().toISOString(),
-      };
-      const updatedCommits = [...(workspace?.commits || []), newCommit];
-      const { data } = await axios.put(`/api/workspace/${workspaceId}`, {
-        commits: updatedCommits,
-      });
-      if (data.success) {
-        await fetchWorkspace();
-        toast.success("Commit added");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to add commit");
-    }
-  };
+  // ── Commit handler ───────────────────────────────────────────────────────
 
-  // ── Timeline handler ──────────────────────────────────────────────────
-  const toggleTimeline = async (index: number) => {
+  const addCommit = (message: string) =>
+    patchWorkspace(
+      {
+        commits: [
+          ...(workspace?.commits || []),
+          { message, author: currentUserId || null, date: new Date().toISOString() },
+        ],
+      },
+      "Commit added"
+    );
+
+  // ── Timeline handler ─────────────────────────────────────────────────────
+
+  const toggleTimeline = (index: number) => {
     if (!workspace) return;
     const updatedTimeline = workspace.timeline.map((item, i) => {
-      if (i === index) {
-        const newCompleted = !item.completed;
-        return {
-          ...item,
-          completed: newCompleted,
-          completedAt: newCompleted ? new Date().toISOString() : undefined,
-        };
-      }
-      return item;
+      if (i !== index) return item;
+      const completed = !item.completed;
+      return { ...item, completed, completedAt: completed ? new Date().toISOString() : undefined };
     });
-    try {
-      const { data } = await axios.put(`/api/workspace/${workspaceId}`, {
-        timeline: updatedTimeline,
-      });
-      if (data.success) {
-        await fetchWorkspace();
-        toast.success("Timeline updated");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update timeline");
-    }
+    patchWorkspace({ timeline: updatedTimeline }, "Timeline updated");
   };
 
-  // ── Update workspace ──────────────────────────────────────────────────
-  const updateWorkspace = async (updates: Partial<Workspace>) => {
-    try {
-      const { data } = await axios.put(`/api/workspace/${workspaceId}`, updates);
-      if (data.success) {
-        await fetchWorkspace();
-        toast.success("Workspace updated");
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update workspace");
-    }
-  };
+  // ── Modal helpers ────────────────────────────────────────────────────────
 
-  const deleteWorkspace = async () => {
-    if (!window.confirm("Delete this workspace? This action cannot be undone.")) return;
-    try {
-      await axios.delete(`/api/workspace/${workspaceId}`);
-      toast.success("Workspace deleted");
-      router.push("/team-workspace");
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to delete workspace");
-    }
-  };
-
-  // ── Modal submit ────────────────────────────────────────────────────
-  const submitModal = () => {
-    if (!modal) return;
-    if (modal.type === "task") {
-      const taskData = taskForm as any;
-      if (modal.item) {
-        closeModal();
-      } else {
-        addTask({
-          description: taskData.description,
-          priority: taskData.priority,
-          assignedTo: taskData.assignedTo,
-          dueDate: taskData.dueDate,
-          status: "Pending",
-        });
-      }
-    }
-    if (modal.type === "member") {
-      addMember(memberForm.username!, memberForm.role!);
-    }
-    if (modal.type === "event") {
-      addEvent(eventForm);
-    }
-    if (modal.type === "commit") {
-      addCommit(commitForm.message);
-    }
-    closeModal();
-  };
-
-  const openModal = (type: "task" | "member" | "event" | "commit", item?: any) => {
+  const openModal = (type: ModalType, item?: any) => {
     setModal({ type, item });
-    if (type === "task") {
-      setTaskForm(item ?? { description: "", priority: "Low", assignedTo: "", dueDate: "", status: "Pending" });
-    }
-    if (type === "member") {
-      setMemberForm({ username: "", role: "" });
-    }
-    if (type === "event") {
-      setEventForm({ title: "", description: "", startDate: "", endDate: "", meetLink: "" });
-    }
-    if (type === "commit") {
-      setCommitForm({ message: "" });
-    }
+    if (type === "task") setTaskForm(item ?? defaultForms.task);
+    if (type === "member") setMemberForm(defaultForms.member);
+    if (type === "event") setEventForm(defaultForms.event);
+    if (type === "commit") setCommitForm(defaultForms.commit);
   };
 
   const closeModal = () => setModal(null);
 
-  // ── Loading & Error ──────────────────────────────────────────────────
+  const submitModal = () => {
+    if (!modal) return;
+    if (modal.type === "task" && !modal.item) {
+      addTask({
+        description: taskForm.description,
+        priority: taskForm.priority,
+        assignedTo: taskForm.assignedTo,
+        dueDate: taskForm.dueDate,
+        status: "Pending",
+      });
+    }
+    if (modal.type === "member") addMember(memberForm.username, memberForm.role);
+    if (modal.type === "event") addEvent(eventForm);
+    if (modal.type === "commit") addCommit(commitForm.message);
+    closeModal();
+  };
+
+  // ── Derived values ───────────────────────────────────────────────────────
+
   if (loading || !currentUser) {
     return (
       <div className="bg-gray-50 min-h-screen flex items-center justify-center">
@@ -389,30 +359,40 @@ export default function ProjectTrackerPage() {
   const members = workspace.members || [];
   const events = workspace.calendarEvents || [];
   const commits = workspace.commits || [];
-  const completedTasks = tasks.filter((t) => t.status === "Completed").length;
 
-  const totalTimeline = workspace.timeline.length;
+  const completedTasks = tasks.filter((t) => t.status === "Completed").length;
   const completedTimeline = workspace.timeline.filter((t) => t.completed).length;
-  const progress = totalTimeline > 0 ? Math.round((completedTimeline / totalTimeline) * 100) : 0;
+  const progress =
+    workspace.timeline.length > 0
+      ? Math.round((completedTimeline / workspace.timeline.length) * 100)
+      : 0;
 
   const tabs = [
-    { id: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: "tasks", label: "Tasks", icon: <ListTodo className="w-4 h-4" />, badge: tasks.filter((t) => t.status !== "Completed").length },
-    { id: "team", label: "Team", icon: <UserCheck className="w-4 h-4" />, badge: members.length },
-    { id: "calendar", label: "Calendar", icon: <CalendarDays className="w-4 h-4" />, badge: events.length },
-  ] as const;
+    { id: "overview" as Tab, label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
+    {
+      id: "tasks" as Tab,
+      label: "Tasks",
+      icon: <ListTodo className="w-4 h-4" />,
+      badge: tasks.filter((t) => t.status !== "Completed").length,
+    },
+    { id: "team" as Tab, label: "Team", icon: <UserCheck className="w-4 h-4" />, badge: members.length },
+    { id: "calendar" as Tab, label: "Calendar", icon: <CalendarDays className="w-4 h-4" />, badge: events.length },
+  ];
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Back button */}
+
+        {/* Back */}
         <Link href="/team-workspace">
           <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900">
             <ArrowLeft className="w-4 h-4" /> Back to Workspaces
           </button>
         </Link>
 
-        {/* Workspace hero card */}
+        {/* Hero card */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="relative h-40 bg-gradient-to-r from-gray-700 to-gray-900">
             <div className="absolute inset-0 bg-black/40" />
@@ -445,32 +425,36 @@ export default function ProjectTrackerPage() {
               }`}
             >
               {tab.icon} {tab.label}
-              {"badge" in tab && tab.badge > 0 && (
-                <span className="text-xs bg-gray-200 text-gray-700 px-1.5 rounded-full">{tab.badge}</span>
+              {tab.badge != null && tab.badge > 0 && (
+                <span className="text-xs bg-gray-200 text-gray-700 px-1.5 rounded-full">
+                  {tab.badge}
+                </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* Overview Tab */}
+        {/* ── Overview Tab ── */}
         {activeTab === "overview" && (
           <div className="grid md:grid-cols-2 gap-6">
             <div className="bg-white border border-gray-200 rounded-2xl p-5">
               <h3 className="font-semibold text-gray-900 mb-3">Progress & Timeline</h3>
+
+              {/* Task counts */}
               <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="text-center p-2 bg-gray-50 rounded-xl">
-                  <div className="text-xl font-bold text-green-600">{completedTasks}</div>
-                  <div className="text-xs text-gray-500">Done</div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded-xl">
-                  <div className="text-xl font-bold text-blue-600">{tasks.filter((t) => t.status === "In Progress").length}</div>
-                  <div className="text-xs text-gray-500">Active</div>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded-xl">
-                  <div className="text-xl font-bold text-amber-600">{tasks.filter((t) => t.status === "Pending").length}</div>
-                  <div className="text-xs text-gray-500">Pending</div>
-                </div>
+                {[
+                  { label: "Done", count: completedTasks, color: "text-green-600" },
+                  { label: "Active", count: tasks.filter((t) => t.status === "In Progress").length, color: "text-blue-600" },
+                  { label: "Pending", count: tasks.filter((t) => t.status === "Pending").length, color: "text-amber-600" },
+                ].map(({ label, count, color }) => (
+                  <div key={label} className="text-center p-2 bg-gray-50 rounded-xl">
+                    <div className={`text-xl font-bold ${color}`}>{count}</div>
+                    <div className="text-xs text-gray-500">{label}</div>
+                  </div>
+                ))}
               </div>
+
+              {/* Timeline checkboxes */}
               <div className="space-y-2">
                 {workspace.timeline.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-3">
@@ -487,7 +471,11 @@ export default function ProjectTrackerPage() {
                         {item.name}
                       </span>
                       <span className="text-xs text-gray-400">
-                        {item.completed ? (item.completedAt ? new Date(item.completedAt).toLocaleDateString() : "Done") : "Pending"}
+                        {item.completed
+                          ? item.completedAt
+                            ? new Date(item.completedAt).toLocaleDateString()
+                            : "Done"
+                          : "Pending"}
                       </span>
                     </div>
                   </div>
@@ -496,6 +484,7 @@ export default function ProjectTrackerPage() {
             </div>
 
             <div className="space-y-5">
+              {/* GitHub & commits */}
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="font-semibold text-gray-900">GitHub</h3>
@@ -522,17 +511,11 @@ export default function ProjectTrackerPage() {
                 )}
                 {commits.length > 0 && (
                   <div className="mt-3 max-h-40 overflow-y-auto space-y-1">
-                    {commits.slice().reverse().map((commit, idx) => (
+                    {[...commits].reverse().map((commit, idx) => (
                       <div key={idx} className="bg-gray-50 p-2 rounded-lg text-sm">
                         <p className="font-medium">{commit.message}</p>
                         <div className="flex justify-between text-xs text-gray-400">
-                          <span>
-                            by {commit.author
-                              ? (typeof commit.author === "string"
-                                  ? "User"
-                                  : commit.author.username ?? "Unknown")
-                              : "Unknown"}
-                          </span>
+                          <span>by {typeof workspace.leader !== "string" ? workspace.leader.username : ""}</span>
                           <span>{new Date(commit.date).toLocaleDateString()}</span>
                         </div>
                       </div>
@@ -541,11 +524,14 @@ export default function ProjectTrackerPage() {
                 )}
               </div>
 
-              {/* ─── Upcoming Events (Overview) ────────────────────────── */}
+              {/* Upcoming events */}
               <div className="bg-white border border-gray-200 rounded-2xl p-5">
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="font-semibold text-gray-900">Upcoming Events</h3>
-                  <button onClick={() => setActiveTab("calendar")} className="text-sm text-blue-600 hover:underline">
+                  <button
+                    onClick={() => setActiveTab("calendar")}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
                     View all →
                   </button>
                 </div>
@@ -564,7 +550,7 @@ export default function ProjectTrackerPage() {
           </div>
         )}
 
-        {/* Tasks Tab */}
+        {/* ── Tasks Tab ── */}
         {activeTab === "tasks" && (
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
@@ -586,24 +572,20 @@ export default function ProjectTrackerPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     {["Task", "Priority", "Assignee", "Status", "Due", "Actions"].map((h) => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500">{h}</th>
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {tasks.map((task) => {
-                    const assignee = members.find((m) => {
-                      const mId = typeof m.user === "string" ? m.user : m.user._id;
-                      const taskId = typeof task.assignedTo === "string"
-                        ? task.assignedTo
-                        : task.assignedTo?._id || "";
-                      return mId === taskId;
-                    });
-                    const assigneeName = assignee
-                      ? (typeof assignee.user === "string"
-                          ? "User"
-                          : assignee.user.username ?? "Unknown")
-                      : "Unassigned";
+                    // Find the member assigned to this task to display their name
+                    const taskAssigneeId =
+                      typeof task.assignedTo === "string" ? task.assignedTo : task.assignedTo?._id || "";
+                    const assignee = members.find((m) => getId(m.user) === taskAssigneeId);
+                    const assigneeName = assignee ? getName(assignee.user) : "Unassigned";
+
                     return (
                       <tr key={task._id} className="border-b border-gray-100">
                         <td className="px-4 py-3 max-w-xs">{task.description}</td>
@@ -627,7 +609,7 @@ export default function ProjectTrackerPage() {
                               <button
                                 onClick={() => completeTask(task._id!)}
                                 className="text-green-600 hover:text-green-800"
-                                title="Complete task"
+                                title="Mark complete"
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </button>
@@ -659,7 +641,7 @@ export default function ProjectTrackerPage() {
           </div>
         )}
 
-        {/* Team Tab */}
+        {/* ── Team Tab ── */}
         {activeTab === "team" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -675,18 +657,15 @@ export default function ProjectTrackerPage() {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {members.map((m) => {
-                const userId = typeof m.user === "string" ? m.user : m.user._id;
-                const displayName = typeof m.user === "string"
-                  ? "User"
-                  : m.user.username ?? "Unknown";
-                const isLeaderMember = userId === (typeof workspace.leader === "string"
-                  ? workspace.leader
-                  : workspace.leader._id);
+                const userId = getId(m.user);
+                const displayName = getName(m.user);
+                const isLeaderMember = userId === getId(workspace.leader);
                 const initials = displayName
                   .split(" ")
                   .map((n) => n[0])
                   .join("")
                   .toUpperCase();
+
                 return (
                   <div key={userId} className="bg-white border border-gray-200 rounded-2xl p-4">
                     <div className="flex items-start gap-3">
@@ -698,14 +677,12 @@ export default function ProjectTrackerPage() {
                         <p className="text-xs text-blue-600">{m.role}</p>
                       </div>
                       {isLeader && !isLeaderMember && (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => removeMember(userId)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => removeMember(userId)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
                     <div className="mt-3 pt-3 border-t border-gray-100">
@@ -721,7 +698,7 @@ export default function ProjectTrackerPage() {
           </div>
         )}
 
-        {/* Calendar Tab – CORRECTED */}
+        {/* ── Calendar Tab ── */}
         {activeTab === "calendar" && (
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
@@ -739,21 +716,19 @@ export default function ProjectTrackerPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Event</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Meet Link</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Start</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">End</th>
-                    {isLeader && <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Actions</th>}
+                    {["Event", "Meet Link", "Start", "End", ...(isLeader ? ["Actions"] : [])].map((h) => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {events.map((ev) => (
                     <tr key={ev._id} className="border-b border-gray-100">
                       <td className="px-4 py-3">
-                        <div>
-                          <div className="font-medium text-gray-900">{ev.title}</div>
-                          {ev.description && <div className="text-xs text-gray-500">{ev.description}</div>}
-                        </div>
+                        <div className="font-medium text-gray-900">{ev.title}</div>
+                        {ev.description && <div className="text-xs text-gray-500">{ev.description}</div>}
                       </td>
                       <td className="px-4 py-3">
                         {ev.meetLink ? (
@@ -789,14 +764,12 @@ export default function ProjectTrackerPage() {
         )}
       </div>
 
-      {/* ─── Modals ────────────────────────────────────────────────────────── */}
+      {/* ── Modals ── */}
       {modal && (
         <Modal
           title={
             modal.type === "task"
-              ? modal.item
-                ? "Edit Task"
-                : "Add Task"
+              ? modal.item ? "Edit Task" : "Add Task"
               : modal.type === "member"
               ? "Add Member"
               : modal.type === "event"
@@ -812,20 +785,21 @@ export default function ProjectTrackerPage() {
             }}
             className="space-y-4"
           >
+            {/* Task form */}
             {modal.type === "task" && (
               <>
                 <textarea
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg"
                   rows={2}
                   placeholder="Task description"
-                  value={taskForm.description || ""}
+                  value={taskForm.description}
                   onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))}
                   required
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     className="px-3 py-2 border border-gray-200 rounded-lg"
-                    value={taskForm.priority || "Low"}
+                    value={taskForm.priority}
                     onChange={(e) => setTaskForm((f) => ({ ...f, priority: e.target.value as any }))}
                   >
                     <option>Low</option>
@@ -834,7 +808,7 @@ export default function ProjectTrackerPage() {
                   </select>
                   <select
                     className="px-3 py-2 border border-gray-200 rounded-lg"
-                    value={taskForm.status || "Pending"}
+                    value={taskForm.status}
                     onChange={(e) => setTaskForm((f) => ({ ...f, status: e.target.value as any }))}
                     disabled={!!modal.item}
                   >
@@ -851,46 +825,43 @@ export default function ProjectTrackerPage() {
                     required
                   >
                     <option value="">Assign to</option>
-                    {members.map((m) => {
-                      const id = typeof m.user === "string" ? m.user : m.user._id;
-                      const name = typeof m.user === "string" ? "User" : m.user.username ?? "Unknown";
-                      return (
-                        <option key={id} value={id}>
-                          {name}
-                        </option>
-                      );
-                    })}
+                    {members.map((m) => (
+                      <option key={getId(m.user)} value={getId(m.user)}>
+                        {getName(m.user)}
+                      </option>
+                    ))}
                   </select>
                   <input
                     type="date"
                     className="px-3 py-2 border border-gray-200 rounded-lg"
-                    value={taskForm.dueDate || ""}
+                    value={taskForm.dueDate}
                     onChange={(e) => setTaskForm((f) => ({ ...f, dueDate: e.target.value }))}
                   />
                 </div>
               </>
             )}
 
+            {/* Member form */}
             {modal.type === "member" && (
               <>
                 <input
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg"
                   placeholder="Username"
-                  value={memberForm.username || ""}
+                  value={memberForm.username}
                   onChange={(e) => setMemberForm((f) => ({ ...f, username: e.target.value }))}
                   required
                 />
                 <input
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg"
                   placeholder="Role (e.g., Developer)"
-                  value={memberForm.role || ""}
+                  value={memberForm.role}
                   onChange={(e) => setMemberForm((f) => ({ ...f, role: e.target.value }))}
                   required
                 />
               </>
             )}
 
-            {/* ─── Event Modal – CORRECTED ─────────────────────────────── */}
+            {/* Event form */}
             {modal.type === "event" && (
               <>
                 <input
@@ -932,16 +903,15 @@ export default function ProjectTrackerPage() {
               </>
             )}
 
+            {/* Commit form */}
             {modal.type === "commit" && (
-              <>
-                <input
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                  placeholder="Commit message"
-                  value={commitForm.message}
-                  onChange={(e) => setCommitForm((f) => ({ ...f, message: e.target.value }))}
-                  required
-                />
-              </>
+              <input
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                placeholder="Commit message"
+                value={commitForm.message}
+                onChange={(e) => setCommitForm((f) => ({ ...f, message: e.target.value }))}
+                required
+              />
             )}
 
             <div className="flex gap-3 pt-2 border-t border-gray-200">

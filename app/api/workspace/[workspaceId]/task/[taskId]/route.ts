@@ -132,7 +132,7 @@ export async function DELETE(
     }
 
     workspace.tasks = workspace.tasks.filter(
-      (t: any) => t._id.toString() !== params.taskId
+      (t: any) => t._id.toString() !== taskId
     );
 
     await workspace.save();
