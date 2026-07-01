@@ -1,404 +1,422 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import axios from "axios";
 import {
-  Zap, Trophy, Flame, Star, TrendingUp, Clock,
-  CheckCircle, Code2, Target, ChevronRight, BarChart3, Calendar,
+  Zap, Trophy, Flame, Star, Code2, Target, ChevronRight,
+  CheckCircle, Clock, Terminal, BarChart3, Calendar,
+  Filter, X, ChevronLeft,
 } from "lucide-react";
 
-// ─── Types ──────────────────────────────────────────────────────
-interface Problem {
-  id: number; name: string; title: string; difficulty: "Easy" | "Medium" | "Hard";
-  points: number; question: string; example?: string; topic?: string;
-}
-interface LeaderboardUser {
-  rank: number; name: string; points: number; problemsSolved: number;
-  avatar: string; isMe?: boolean; streak?: number;
-}
-interface SolvedProblem {
-  id: number; title: string; difficulty: "Easy" | "Medium" | "Hard";
-  date: string; points: number;
+// ─── Types ──────────────────────────────────────────────────────────────
+interface Question {
+  _id: string;
+  category: "aptitude" | "cs_fundamental" | "puzzle" | "dsa" | "pseudo";
+  question: string;
+  image?: string;
+  options: string[];
+  correctOption: string;
+  explanation?: string;
+  difficulty?: string;
 }
 
-// ─── Static data ────────────────────────────────────────────────
-const dailyProblem: Problem = {
-  id: 1, name: "two-sum", title: "Two Sum", difficulty: "Easy", points: 15,
-  topic: "Arrays & Hashing",
-  question: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume each input has exactly one solution, and you may not use the same element twice.",
-  example: "Input:  nums = [2,7,11,15], target = 9\nOutput: [0,1]\nReason: nums[0] + nums[1] == 9",
-};
+interface Submission {
+  _id: string;
+  question: { _id: string };
+  selectedOption: string;
+  isCorrect: boolean;
+  pointsEarned: number;
+}
 
-const csFundamentalsProblem: Problem = {
-  id: 2, name: "database-normalization", title: "Database Normalization",
-  difficulty: "Medium", points: 10, topic: "RDBMS",
-  question: "Which of the following best describes the purpose of database normalization?",
-};
-
-const leaderboard: LeaderboardUser[] = [
-  { rank: 1, name: "Alex Chen",       points: 1245, problemsSolved: 89, avatar: "AC", streak: 42  },
-  { rank: 2, name: "Sarah Kim",       points: 1180, problemsSolved: 84, avatar: "SK", streak: 38  },
-  { rank: 3, name: "Mike Rodriguez",  points: 1120, problemsSolved: 81, avatar: "MR", streak: 31  },
-  { rank: 4, name: "You",             points:  985, problemsSolved: 72, avatar: "ME", isMe: true, streak: 5 },
-  { rank: 5, name: "Emma Wilson",     points:  920, problemsSolved: 68, avatar: "EW", streak: 22  },
-  { rank: 6, name: "James Brown",     points:  875, problemsSolved: 65, avatar: "JB", streak: 14  },
-  { rank: 7, name: "Lisa Zhang",      points:  810, problemsSolved: 61, avatar: "LZ", streak: 9   },
+const CATEGORIES = [
+  { key: "all", label: "All" },
+  { key: "aptitude", label: "Aptitude" },
+  { key: "dsa", label: "DSA" },
+  { key: "cs_fundamental", label: "CS Fundamentals" },
+  { key: "puzzle", label: "Puzzles" },
+  { key: "pseudo", label: "Pseudo Code" },
 ];
 
-const solvedProblems: SolvedProblem[] = [
-  { id: 1, title: "Reverse String",          difficulty: "Easy",   date: "2025-04-12", points: 10 },
-  { id: 2, title: "Valid Parentheses",        difficulty: "Easy",   date: "2025-04-11", points: 10 },
-  { id: 3, title: "Merge Two Sorted Lists",   difficulty: "Medium", date: "2025-04-10", points: 15 },
-  { id: 4, title: "Binary Search",            difficulty: "Easy",   date: "2025-04-09", points: 10 },
-  { id: 5, title: "Maximum Subarray",         difficulty: "Medium", date: "2025-04-08", points: 15 },
-  { id: 6, title: "Climbing Stairs",          difficulty: "Easy",   date: "2025-04-07", points: 10 },
-];
-
-const monthlyProgress = {
-  totalSolved: 12, easySolved: 8, mediumSolved: 3, hardSolved: 1,
-  currentStreak: 5, pointsEarned: 180,
-};
-
-const quickStats = [
-  { label: "Global Rank",      value: "#4" },
-  { label: "Total Points",     value: "985" },
-  { label: "Problems Solved",  value: "72" },
-  { label: "Success Rate",     value: "87%" },
-];
-
-// ─── Difficulty chip (solid colors) ────────────────────────────
-function DiffChip({ diff }: { diff: "Easy" | "Medium" | "Hard" }) {
-  const colors = {
-    Easy:   "bg-green-100 text-green-700",
-    Medium: "bg-amber-100 text-amber-700",
-    Hard:   "bg-red-100 text-red-700",
+// ─── Helper Components (styled with the new theme) ────────────────────
+function CategoryBadge({ category }: { category: string }) {
+  const colors: Record<string, string> = {
+    aptitude: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    dsa: "bg-violet-50 text-violet-700 border-violet-200",
+    cs_fundamental: "bg-green-50 text-green-700 border-green-200",
+    puzzle: "bg-amber-50 text-amber-700 border-amber-200",
+    pseudo: "bg-orange-50 text-orange-700 border-orange-200",
   };
-  return <span className={`text-xs px-2 py-0.5 rounded-full ${colors[diff]}`}>{diff}</span>;
-}
-
-// ─── Daily timer (simple) ──────────────────────────────────────
-function DailyTimer() {
-  const [timeLeft, setTimeLeft] = useState("");
-  useEffect(() => {
-    function update() {
-      const now = new Date();
-      const midnight = new Date();
-      midnight.setHours(24, 0, 0, 0);
-      const diff = midnight.getTime() - now.getTime();
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
-    }
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, []);
+  const cls = colors[category] || "bg-gray-50 text-gray-600 border-gray-200";
   return (
-    <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-      <Clock className="w-3 h-3" /> {timeLeft}
-    </div>
+    <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${cls} uppercase tracking-wider`}>
+      {category}
+    </span>
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────
-export default function CodeDecodePage() {
-  const [quizSelected, setQuizSelected] = useState<string | null>(null);
-  const [quizRevealed, setQuizRevealed] = useState(false);
-  const correctAnswer = "A";
-  const quizOptions = [
-    { id: "A", text: "To reduce data redundancy and dependency" },
-    { id: "B", text: "To increase data duplication for faster access" },
-    { id: "C", text: "To complicate the database structure" },
-    { id: "D", text: "To eliminate all primary keys from tables" },
-  ];
+// ─── Main Page ──────────────────────────────────────────────────────────
+export default function DailyQuestionsPage() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"today" | "all">("today");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [score, setScore] = useState(0);
+  const [submissionData, setSubmissionData] = useState<Record<string, { selectedOption: string; isCorrect: boolean; explanation?: string; pointsEarned: number }>>({});
+
+  // ── Fetch questions ──────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setLoading(true);
+        let url = "/api/daily-question";
+        const { data } = await axios.get(url);
+        if (data.success) {
+          setQuestions(data.data);
+          setCurrentIndex(0);
+          setSelectedAnswers({});
+          setRevealed({});
+          await fetchSubmissions(data.data);
+        } else {
+          setQuestions([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch questions:", error);
+        setQuestions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQuestions();
+  }, [viewMode, selectedCategory]);
+
+  // ── Fetch user submissions ──────────────────────────────────────────
+  const fetchSubmissions = async (questionsList: Question[]) => {
+    try {
+      const { data } = await axios.get("/api/submissions");
+      if (data.success) {
+        const submissions = data.data as Submission[];
+        const subMap: Record<string, any> = {};
+        submissions.forEach((sub: Submission) => {
+          const qId: any = sub.question?._id || sub.question;
+          if (qId) {
+            const question = questionsList.find(q => q._id === qId);
+            subMap[qId] = {
+              selectedOption: sub.selectedOption,
+              isCorrect: sub.isCorrect,
+              pointsEarned: sub.pointsEarned || 0,
+              explanation: question?.explanation || "",
+            };
+          }
+        });
+        setSubmissionData(subMap);
+        const newSelected: Record<string, string> = {};
+        const newRevealed: Record<string, boolean> = {};
+        Object.keys(subMap).forEach(qId => {
+          newSelected[qId] = subMap[qId].selectedOption;
+          newRevealed[qId] = true;
+        });
+        setSelectedAnswers(newSelected);
+        setRevealed(newRevealed);
+      }
+    } catch (error) {
+      console.error("Failed to fetch submissions:", error);
+    }
+  };
+
+  // ── Submission handler ─────────────────────────────────────────────
+  const handleOptionSelect = async (questionId: string, optionLabel: string) => {
+    if (revealed[questionId] || submissionData[questionId]) return;
+    try {
+      const response = await axios.post("/api/submissions", {
+        questionId,
+        selectedOption: optionLabel,
+      });
+      const data = response.data.data;
+      setSelectedAnswers(prev => ({ ...prev, [questionId]: optionLabel }));
+      setRevealed(prev => ({ ...prev, [questionId]: true }));
+      const question = questions.find(q => q._id === questionId);
+      setSubmissionData(prev => ({
+        ...prev,
+        [questionId]: {
+          selectedOption: optionLabel,
+          isCorrect: data.isCorrect,
+          pointsEarned: data.pointsEarned,
+          explanation: question?.explanation || "",
+        },
+      }));
+      if (data.isCorrect) {
+        setScore(prev => prev + data.pointsEarned);
+      }
+    } catch (error) {
+      console.error("Submission failed:", error);
+    }
+  };
+
+  // ── Calculate score ─────────────────────────────────────────────────
+  useEffect(() => {
+    let correct = 0;
+    questions.forEach(q => {
+      if (selectedAnswers[q._id] && selectedAnswers[q._id] === q.correctOption) {
+        correct++;
+      }
+    });
+    setScore(correct);
+  }, [selectedAnswers, questions]);
+
+  const total = questions.length;
+  const currentQ = questions[currentIndex] || null;
+
+  const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); };
+  const handleNext = () => { if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1); };
+  const resetQuiz = () => {
+    setSelectedAnswers({});
+    setRevealed({});
+    setSubmissionData({});
+    setCurrentIndex(0);
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-[#F8FAFB] min-h-screen flex items-center justify-center">
+        <div className="text-[#64748B]">Loading questions...</div>
+      </div>
+    );
+  }
+
+  if (!currentQ && total === 0) {
+    return (
+      <div className="bg-[#F8FAFB] min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-3">{viewMode === "today" ? "📅" : "📭"}</div>
+          <p className="text-sm text-[#64748B]">
+            {viewMode === "today"
+              ? "No question scheduled for today. Check back tomorrow!"
+              : "No questions found for this category."}
+          </p>
+          {viewMode === "today" && (
+            <button
+              onClick={() => setViewMode("all")}
+              className="mt-4 px-5 py-2 rounded-xl bg-[#0D1B2A] text-white text-sm font-medium hover:bg-[#1E3A5F] transition"
+            >
+              Browse all questions →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const hasSubmitted = !!submissionData[currentQ?._id];
+  const isAnswered = revealed[currentQ._id] !== undefined;
+  const selectedOption = selectedAnswers[currentQ._id];
+  const isCorrect = isAnswered && selectedOption === currentQ.correctOption;
+  const submissionInfo = submissionData[currentQ?._id];
 
   return (
-    <div className="bg-gray-50 min-h-screen font-sans py-8 px-4 sm:px-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Hero */}
-        <div className="mb-8">
-          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs text-green-700 mb-3">
-            <Code2 className="w-3.5 h-3.5" /> Practice Platform · Daily Challenges Live
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Code & Decode</h1>
-          <p className="text-sm text-gray-500 mt-1">Sharpen your problem‑solving, climb the leaderboard, and maintain your streak.</p>
-        </div>
+    <div className="bg-[#F8FAFB] min-h-screen py-8 px-4 sm:px-6 font-['Inter',-apple-system,BlinkMacSystemFont,sans-serif]">
+      <div className="max-w-4xl mx-auto">
 
-        {/* Hero stats row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white">
-              <Flame className="w-5 h-5" />
+        {/* ── Header ────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-1.5 bg-[#EDF7F3] border border-[#A7F3D0] rounded-full py-1 px-3 mb-3 text-xs font-medium text-[#047857]">
+              <Code2 className="w-3 h-3 text-[#0EA472]" /> daily-questions.devnautics.io
             </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">{monthlyProgress.currentStreak}</div>
-              <div className="text-xs text-gray-500">Day streak</div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-extrabold tracking-tight text-[#0D1B2A]">
+                {viewMode === "today" ? "Today's Question" : "All Questions"}
+              </h1>
             </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center text-white">
-              <Star className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">{monthlyProgress.pointsEarned}</div>
-              <div className="text-xs text-gray-500">Points earned</div>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500 flex items-center justify-center text-white">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">{monthlyProgress.totalSolved}</div>
-              <div className="text-xs text-gray-500">Solved this month</div>
-            </div>
+            {viewMode === "today" && (
+              <p className="text-sm text-[#64748B] mt-1">
+                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Two‑column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left (2 cols) */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Daily Challenge */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gray-800 flex items-center justify-center text-white">
-                    <Star className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900">Daily Challenge</h2>
-                    <p className="text-xs text-gray-500">Solve to keep your streak alive!</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DiffChip diff={dailyProblem.difficulty} />
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">+{dailyProblem.points} pts</span>
-                  <DailyTimer />
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="text-xs text-cyan-600 bg-cyan-50 inline-block px-2 py-0.5 rounded-full mb-2">{dailyProblem.topic}</div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{dailyProblem.title}</h3>
-                <p className="text-sm text-gray-600 mb-4">{dailyProblem.question}</p>
-                {dailyProblem.example && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Example</p>
-                    <pre className="text-xs text-gray-700 whitespace-pre-wrap">{dailyProblem.example}</pre>
-                  </div>
-                )}
-                <Link href={`/code-decode/${dailyProblem.name}`}>
-                  <button className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-800 text-white hover:bg-gray-700 flex items-center justify-center gap-2">
-                    <Zap className="w-4 h-4" /> Solve Now <ChevronRight className="w-4 h-4" />
-                  </button>
-                </Link>
-              </div>
-            </div>
-
-            {/* CS Fundamentals Quiz */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-fuchsia-500 flex items-center justify-center text-white">
-                    <Target className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900">CS Fundamentals Quiz</h2>
-                    <p className="text-xs text-gray-500">Test your theoretical knowledge</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DiffChip diff={csFundamentalsProblem.difficulty} />
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">+{csFundamentalsProblem.points} pts</span>
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="text-xs text-purple-600 bg-purple-50 inline-block px-2 py-0.5 rounded-full mb-2">{csFundamentalsProblem.topic}</div>
-                <h3 className="text-base font-bold text-gray-900 mb-2">{csFundamentalsProblem.title}</h3>
-                <p className="text-sm text-gray-600 mb-5">{csFundamentalsProblem.question}</p>
-
-                <div className="space-y-2.5 mb-5">
-                  {quizOptions.map(opt => {
-                    const isSelected = quizSelected === opt.id;
-                    const isCorrect = opt.id === correctAnswer;
-                    let bgClass = "bg-gray-50 border-gray-200 hover:border-gray-300";
-                    if (quizRevealed && isCorrect) bgClass = "bg-green-100 border-green-300";
-                    else if (quizRevealed && isSelected && !isCorrect) bgClass = "bg-red-100 border-red-300";
-                    else if (isSelected) bgClass = "bg-blue-50 border-blue-300";
-                    return (
-                      <button
-                        key={opt.id}
-                        className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border text-sm text-left ${bgClass}`}
-                        onClick={() => { if (!quizRevealed) setQuizSelected(opt.id); }}
-                      >
-                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                          quizRevealed && isCorrect ? "bg-green-200 text-green-800" :
-                          quizRevealed && isSelected && !isCorrect ? "bg-red-200 text-red-800" :
-                          isSelected ? "bg-blue-200 text-blue-800" : "bg-gray-200 text-gray-700"
-                        }`}>{opt.id}</span>
-                        {opt.text}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  disabled={!quizSelected}
-                  onClick={() => setQuizRevealed(true)}
-                  className={`w-full py-3 rounded-xl text-sm font-semibold ${
-                    !quizSelected
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : quizRevealed
-                        ? "bg-green-100 text-green-700 border border-green-300"
-                        : "bg-gray-800 text-white hover:bg-gray-700"
-                  }`}
-                >
-                  {quizRevealed ? "✓ Answer revealed" : quizSelected ? "Submit Answer" : "Select an option first"}
-                </button>
-
-                {quizRevealed && (
-                  <div className="mt-4 p-4 rounded-xl bg-green-50 border border-green-200 text-sm text-green-800">
-                    <p className="font-semibold mb-1">✓ Correct! Database normalization reduces redundancy.</p>
-                    <p className="text-xs text-green-700">Normalization follows normal forms (1NF, 2NF, 3NF) to eliminate anomalies and improve integrity.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Monthly Progress */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gray-800 flex items-center justify-center text-white">
-                    <BarChart3 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900">Monthly Progress</h2>
-                    <p className="text-xs text-gray-500">April 2025</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-sm font-bold text-orange-600">
-                  <Flame className="w-4 h-4" /> {monthlyProgress.currentStreak} day streak
-                </div>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "Total", value: monthlyProgress.totalSolved, max: 30, color: "bg-purple-500" },
-                    { label: "Easy", value: monthlyProgress.easySolved, max: 20, color: "bg-green-500" },
-                    { label: "Medium", value: monthlyProgress.mediumSolved, max: 10, color: "bg-amber-500" },
-                    { label: "Hard", value: monthlyProgress.hardSolved, max: 5, color: "bg-red-500" },
-                  ].map(p => (
-                    <div key={p.label} className="p-4 rounded-xl bg-gray-50 border border-gray-100">
-                      <div className="text-2xl font-bold text-gray-900 mb-0.5">{p.value}</div>
-                      <div className="text-xs text-gray-500 mb-2">{p.label}</div>
-                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${p.color}`} style={{ width: `${Math.min((p.value / p.max) * 100, 100)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-sm font-bold text-gray-900">Recently solved</h3>
-                    <Link href="/code-decode/history"><span className="text-xs text-blue-600 hover:underline cursor-pointer">View all →</span></Link>
-                  </div>
-                  <div className="space-y-2">
-                    {solvedProblems.map(p => (
-                      <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                        <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-gray-900">{p.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <DiffChip diff={p.difficulty} />
-                            <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar className="w-2.5 h-2.5" />{p.date}</span>
-                          </div>
-                        </div>
-                        <span className="text-xs font-bold text-amber-600">+{p.points}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* ── Category filters (only in "all" mode) ────────────── */}
+        {viewMode === "all" && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.key}
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`px-4 py-2 rounded-xl text-sm font-mono font-medium border transition ${
+                  selectedCategory === cat.key
+                    ? "bg-[#EDF7F3] text-[#0EA472] border-[#A7F3D0]"
+                    : "bg-white text-[#64748B] border-[#E8EDF2] hover:bg-gray-50"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
+        )}
 
-          {/* Right Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Stats */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center text-white">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <h2 className="text-sm font-bold text-gray-900">Quick Stats</h2>
+        {/* ── Question Card ────────────────────────────────────────── */}
+        <div className="bg-white border border-[#E8EDF2] rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <CategoryBadge category={currentQ.category} />
+                <span className="text-xs font-mono text-[#64748B]">#{currentQ._id.slice(-6)}</span>
+                {viewMode === "today" && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#EDF7F3] text-[#0EA472] border border-[#A7F3D0]">
+                    Today's Pick
+                  </span>
+                )}
+                {hasSubmitted && (
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                    submissionInfo?.isCorrect
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}>
+                    {submissionInfo?.isCorrect ? "✅ Solved" : "❌ Attempted"}
+                  </span>
+                )}
               </div>
-              <div className="p-5 space-y-3">
-                {quickStats.map(s => (
-                  <div key={s.label} className="flex justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100">
-                    <span className="text-xs text-gray-500">{s.label}</span>
-                    <span className="text-sm font-bold text-gray-900">{s.value}</span>
-                  </div>
-                ))}
-              </div>
+              <span className="text-xs text-[#64748B]">
+                {isAnswered ? (isCorrect ? "✅ Correct" : "❌ Incorrect") : "❓ Not answered"}
+              </span>
             </div>
 
-            {/* Leaderboard */}
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-white">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900">Leaderboard</h2>
-                    <p className="text-xs text-gray-500">All‑time top performers</p>
-                  </div>
+            {/* Question text */}
+            <div className="mb-5">
+              <p className="text-base font-medium text-[#0D1B2A] leading-relaxed">
+                {currentQ.question}
+              </p>
+              {currentQ.image && (
+                <div className="mt-4 rounded-xl overflow-hidden border border-[#E8EDF2]">
+                  <img src={currentQ.image} alt="Question" className="w-full max-h-64 object-cover" />
                 </div>
-                <Link href="/code-decode/leaderboard"><span className="text-xs text-blue-600 hover:underline">Full →</span></Link>
-              </div>
-              <div className="p-4 space-y-2">
-                {leaderboard.map((user, idx) => (
-                  <div
-                    key={user.rank}
-                    className={`flex items-center gap-3 p-3 rounded-xl border ${
-                      user.isMe
-                        ? "bg-blue-50 border-blue-200"
-                        : "bg-gray-50 border-gray-100"
+              )}
+            </div>
+
+            {/* Options */}
+            <div className="space-y-2.5 mb-6">
+              {["A", "B", "C", "D"].map((label, idx) => {
+                const opt = currentQ.options[idx];
+                const isSelected = selectedOption === label;
+                const showCorrect = isAnswered && label === currentQ.correctOption;
+                const showWrong = isAnswered && isSelected && label !== currentQ.correctOption;
+                const isDisabled = hasSubmitted || isAnswered;
+
+                let borderColor = "border-[#E8EDF2]";
+                let bgColor = "bg-white";
+                let textColor = "text-[#0D1B2A]";
+                let leftBorderColor = "border-l-[#E8EDF2]";
+
+                if (showCorrect) {
+                  borderColor = "border-green-300";
+                  bgColor = "bg-green-50";
+                  textColor = "text-green-700";
+                  leftBorderColor = "border-l-green-500";
+                } else if (showWrong) {
+                  borderColor = "border-red-300";
+                  bgColor = "bg-red-50";
+                  textColor = "text-red-700";
+                  leftBorderColor = "border-l-red-500";
+                } else if (isSelected) {
+                  borderColor = "border-[#0EA472]";
+                  bgColor = "bg-[#EDF7F3]";
+                  textColor = "text-[#0D1B2A]";
+                  leftBorderColor = "border-l-[#0EA472]";
+                }
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleOptionSelect(currentQ._id, label)}
+                    disabled={isDisabled}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left transition border ${borderColor} border-l-[3px] ${leftBorderColor} ${bgColor} ${textColor} ${
+                      isDisabled ? "cursor-default opacity-70" : "cursor-pointer hover:bg-[#F8FAFB]"
                     }`}
                   >
-                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                      user.rank === 1 ? "bg-amber-400 text-amber-900" :
-                      user.rank === 2 ? "bg-gray-300 text-gray-700" :
-                      user.rank === 3 ? "bg-orange-400 text-orange-900" :
-                      "bg-gray-200 text-gray-600"
-                    }`}>{user.rank}</div>
-                    <div className="w-8 h-8 rounded-lg bg-gray-300 flex items-center justify-center text-xs font-bold text-gray-800 shrink-0">
-                      {user.avatar}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-gray-900">
-                        {user.name}{user.isMe && <span className="ml-1 text-xs text-blue-600">(you)</span>}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                        <span>{user.problemsSolved} solved</span>
-                        {user.streak && <span className="flex items-center gap-0.5 text-orange-500"><Flame className="w-2.5 h-2.5" />{user.streak}</span>}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-amber-600">{user.points}</div>
-                      <div className="text-[10px] text-gray-500">pts</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                      isSelected || showCorrect || showWrong
+                        ? `${showCorrect ? "bg-green-200 text-green-800" : showWrong ? "bg-red-200 text-red-800" : "bg-[#0EA472] text-white"}`
+                        : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {label}
+                    </span>
+                    <span className="flex-1">{opt}</span>
+                    {showCorrect && <CheckCircle className="w-4 h-4 shrink-0 text-green-600" />}
+                    {showWrong && <X className="w-4 h-4 shrink-0 text-red-600" />}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Explanation */}
+            {(isAnswered || hasSubmitted) && (currentQ.explanation || submissionInfo?.explanation) && (
+              <div className={`p-4 rounded-xl text-sm mb-4 border ${
+                (isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect)
+                  ? "bg-green-50 border-green-200"
+                  : "bg-red-50 border-red-200"
+              }`}>
+                <p className={`font-semibold mb-1 ${
+                  (isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect)
+                    ? "text-green-700"
+                    : "text-red-700"
+                }`}>
+                  {(isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect) ? "✅ Correct" : "❌ Incorrect"}
+                  {submissionInfo?.pointsEarned && submissionInfo.pointsEarned > 0 && ` (+${submissionInfo.pointsEarned} pts)`}
+                </p>
+                <p className="text-[#64748B] text-xs">{currentQ.explanation || submissionInfo?.explanation || ""}</p>
+                {hasSubmitted && (
+                  <p className="text-xs text-[#64748B] mt-2">
+                    You already submitted this question. {submissionInfo?.isCorrect ? "Great job!" : "Keep practicing!"}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── Stats ───────────────────────────────────────────────── */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Attempted", value: Object.keys(revealed).length, color: "text-cyan-600" },
+            { label: "Correct", value: score, color: "text-green-600" },
+            { label: "Incorrect", value: Object.keys(revealed).length - score, color: "text-red-600" },
+            { label: "Accuracy", value: Object.keys(revealed).length > 0
+                ? Math.round((score / Object.keys(revealed).length) * 100) + "%"
+                : "—", color: "text-amber-600" },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white border border-[#E8EDF2] rounded-xl p-4 text-center shadow-sm">
+              <div className={`text-2xl font-mono font-bold ${stat.color}`}>{stat.value}</div>
+              <div className="text-xs text-[#64748B] mt-1">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Navigation dots ────────────────────────────────────── */}
+        {total > 1 && (
+          <div className="flex justify-center gap-1.5 mt-6">
+            {questions.map((_, idx) => {
+              const q = questions[idx];
+              const isAnswered = revealed[q._id] !== undefined;
+              const isCorrect = isAnswered && selectedAnswers[q._id] === q.correctOption;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`w-2 h-2 rounded-full transition ${
+                    idx === currentIndex
+                      ? "bg-[#0D1B2A]"
+                      : isAnswered
+                        ? isCorrect ? "bg-green-500" : "bg-red-500"
+                        : "bg-[#E8EDF2]"
+                  }`}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
