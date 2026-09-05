@@ -1,4 +1,3 @@
-// app/api/analytics/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import connectDb from "@/lib/db";
 import { auth } from "@/auth";
@@ -8,10 +7,14 @@ import Challenge from "@/models/question-model";
 import Community from "@/models/community-model";
 import Workspace from "@/models/workspace-model";
 
-export async function GET(req: NextRequest) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     await connectDb();
 
+    // ─── Authenticate ──────────────────────────────────────────────────────
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -20,17 +23,29 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ email: session.user.email });
-    if (!user) {
+    // ─── Get the target user ID from params ─────────────────────────────
+    const { id: userId } = await params;
+
+    // ─── Get the current user from the database ──────────────────────────
+    const currentUser = await User.findOne({ email: session.user.email });
+    if (!currentUser) {
       return NextResponse.json(
         { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    const userId = user._id;
-
-    // ─── Activities ────────────────────────────────────────────────────────
+    // ─── Authorization: Only allow users to view their own analytics ────
+    
+    if (currentUser._id.toString() !== userId) {
+      console.warn(`User ${currentUser._id} attempted to view analytics of ${userId}`);
+      return NextResponse.json(
+        { success: false, message: "Access denied. You can only view your own analytics." },
+        { status: 403 }
+      );
+    }
+    
+    // ─── Activities ──────────────────────────────────────────────────────
     const totalActivities = await Activity.countDocuments({ createdBy: userId });
 
     const likesAgg = await Activity.aggregate([
@@ -59,17 +74,14 @@ export async function GET(req: NextRequest) {
     ]);
 
     // ─── Challenges ──────────────────────────────────────────────────────
-    // Total participated: user appears in any leaderboard
     const totalParticipated = await Challenge.countDocuments({
       "leaderboard.userId": userId,
     });
 
-    // Solved: user appears in successfulSubmissions array
     const solved = await Challenge.countDocuments({
       successfulSubmissions: userId,
     });
 
-    // Challenge timeline: daily points from leaderboard
     const challengeTimeline = await Challenge.aggregate([
       { $match: { "leaderboard.userId": userId } },
       { $unwind: "$leaderboard" },
@@ -89,7 +101,6 @@ export async function GET(req: NextRequest) {
     let tasksAssigned = 0;
     let tasksCompleted = 0;
     activeProjects.forEach((project) => {
-      // project.tasks is an array of task subdocuments
       const assigned = project.tasks.filter(
         (t: any) => t.assignedTo?.toString() === userId.toString()
       );
@@ -105,15 +116,17 @@ export async function GET(req: NextRequest) {
       pendingRequests: userId,
     });
 
+    // ─── User Info ───────────────────────────────────────────────────────
+    const userInfo = {
+      username: currentUser.username,
+      email: currentUser.email,
+      totalPoints: currentUser.totalPoints || 0,
+      connections: currentUser.connectedUsers?.length || 0,
+    };
     // ─── Response ────────────────────────────────────────────────────────
     return NextResponse.json({
       success: true,
-      userInfo: {
-        username: user.username,
-        email: user.email,
-        totalPoints: user.totalPoints || 0,
-        connections: user.connectedUsers?.length || 0,
-      },
+      userInfo,
       analytics: {
         activities: {
           total: totalActivities,
@@ -125,7 +138,7 @@ export async function GET(req: NextRequest) {
           totalParticipated,
           solved,
           timeline: challengeTimeline,
-          totalPointsScored: user.totalPoints || 0,
+          totalPointsScored: currentUser.totalPoints || 0,
         },
         projects: {
           total: activeProjects.length,

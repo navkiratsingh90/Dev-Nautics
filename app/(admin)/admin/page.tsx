@@ -2,462 +2,393 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
+import Link from "next/link";
 import {
-  Plus, Pencil, Trash2, X, Check, ChevronDown,
-  ChevronLeft, ChevronRight,
+  LayoutDashboard, Users, FolderOpen, MessageSquare,
+  FileText, Settings, HelpCircle, LogOut,
+  ChevronRight, Plus, Search, Edit, Trash2,
+  BookOpen, Code, Briefcase, Globe, Mail, Award,
 } from "lucide-react";
+import QuestionsPanel from "@/components/Admin-Question-Panel";
+import UsersPanel from "@/components/Admin-User-Panel";
+import WorkspacesPanel from "@/components/Admin-Workspace-Panel";
+import CollaborationsPanel from "@/components/Admin-Collaboration-Panel";
+import CommunitiesPanel from "@/components/Admin-Communities-Panel";
+import SubmissionsPanel from "@/components/Admin-Submission-Panel";
 
-const C = {
-  pageBg:      "#08080F",
-  cardBg:      "#0D0D1A",
-  surface:     "#131325",
-  surface2:    "#1A1A2E",
-  violet:      "#7C3AED",
-  violetDim:   "rgba(124,58,237,0.12)",
-  violetBorder:"rgba(124,58,237,0.20)",
-  cyan:        "#06B6D4",
-  green:       "#10B981",
-  red:         "#EF4444",
-  textPrimary: "#F0EFFF",
-  textMuted:   "#6B7280",
-  border:      "rgba(255,255,255,0.06)",
-};
+// ─── Chart.js imports ────────────────────────────────────────────────────
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+import { Line, Bar } from "react-chartjs-2";
 
-const CATEGORIES = [
-  "aptitude",
-  "dsa",
-  "cs_fundamental",
-  "puzzle",
-  "pseudo",
-];
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
-const DIFFICULTIES = ["easy", "medium", "hard"];
-
-interface Question {
-  _id: string;
-  category: string;
-  question: string;
-  image?: string;
-  options: string[];
-  correctOption: string;
-  explanation?: string;
-  difficulty: string;
-  tags: string[];
-  isActive: boolean;
-  scheduledDate?: string;
+// ─── Type definitions ────────────────────────────────────────────────────
+interface DashboardStats {
+  totalUsers: number;
+  totalQuestions: number;
+  totalWorkspaces: number;
+  totalCollaborations: number;
+  totalCommunities: number;
+  totalSubmissions: number;
+  recentSubmissions: any[];
+  recentUsers: any[];
 }
 
-export default function AdminQuestionsPage() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState<Question | null>(null);
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+// ─── Sidebar navigation items ───────────────────────────────────────────
+const navItems = [
+  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: "questions", label: "Questions", icon: <BookOpen className="w-4 h-4" /> },
+  { id: "users", label: "Users", icon: <Users className="w-4 h-4" /> },
+  { id: "workspaces", label: "Workspaces", icon: <FolderOpen className="w-4 h-4" /> },
+  { id: "collaborations", label: "Collaborations", icon: <Briefcase className="w-4 h-4" /> },
+  { id: "communities", label: "Communities", icon: <Globe className="w-4 h-4" /> },
+  { id: "submissions", label: "Submissions", icon: <FileText className="w-4 h-4" /> },
+];
 
-  const [form, setForm] = useState({
-    category: "aptitude",
-    question: "",
-    image: "",
-    options: ["", "", "", ""],
-    correctOption: "A",
-    explanation: "",
-    difficulty: "medium",
-    tags: "",
-    scheduledDate: "",
+// ─── Admin Dashboard Page ──────────────────────────────────────────────
+export default function AdminDashboard() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    totalQuestions: 0,
+    totalWorkspaces: 0,
+    totalCollaborations: 0,
+    totalCommunities: 0,
+    totalSubmissions: 0,
+    recentSubmissions: [],
+    recentUsers: [],
   });
+  const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // ── Fetch dashboard stats ─────────────────────────────────────────────
   useEffect(() => {
-    fetchQuestions();
+    const fetchStats = async () => {
+      try {
+        const { data } = await axios.get("/api/admin/stats");
+        if (data.success) {
+          setStats(data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
   }, []);
 
-  const fetchQuestions = async () => {
-    try {
-      setLoading(true);
-      const { data } = await axios.get("/api/daily-question/add");
-      if (data.success) {
-        setQuestions(data.data);
-      }
-    } catch (error) {
-      toast.error("Failed to load questions");
-    } finally {
-      setLoading(false);
+  // ── Render content based on active tab ──────────────────────────────
+  const renderContent = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return <DashboardContent stats={stats} loading={loading} />;
+      case "questions":
+        return <QuestionsPanel />;
+      case "users":
+        return <UsersPanel />;
+      case "workspaces":
+        return <WorkspacesPanel />;
+      case "collaborations":
+        return <CollaborationsPanel />;
+      case "communities":
+        return <CommunitiesPanel />;
+      case "submissions":
+        return <SubmissionsPanel />;
+      default:
+        return <DashboardContent stats={stats} loading={loading} />;
     }
   };
-
-  const resetForm = () => {
-    setForm({
-      category: "aptitude",
-      question: "",
-      image: "",
-      options: ["", "", "", ""],
-      correctOption: "A",
-      explanation: "",
-      difficulty: "medium",
-      tags: "",
-      scheduledDate: "",
-    });
-    setEditing(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.question.trim() || form.options.some(o => !o.trim())) {
-      toast.error("Please fill all fields");
-      return;
-    }
-
-    try {
-      const payload = {
-        ...form,
-        tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
-        options: form.options,
-      };
-
-      let response;
-      if (editing) {
-        // Update existing question
-        response = await axios.put(`/api/daily-question/add/${editing._id}`, payload);
-        toast.success("Question updated");
-      } else {
-        // Create new question
-        response = await axios.post("/api/daily-question/add", payload);
-        toast.success("Question created");
-      }
-
-      await fetchQuestions();
-      setShowModal(false);
-      resetForm();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to save question");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this question?")) return;
-    try {
-      await axios.delete(`/api/questions/${id}`);
-      toast.success("Question deleted");
-      await fetchQuestions();
-    } catch (error) {
-      toast.error("Failed to delete question");
-    }
-  };
-
-  const openEdit = (q: Question) => {
-    setEditing(q);
-    setForm({
-      category: q.category,
-      question: q.question,
-      image: q.image || "",
-      options: q.options,
-      correctOption: q.correctOption,
-      explanation: q.explanation || "",
-      difficulty: q.difficulty,
-      tags: (q.tags || []).join(", "),
-      scheduledDate: q.scheduledDate || "",
-    });
-    setShowModal(true);
-  };
-
-  const filtered = questions.filter(q => {
-    const matchSearch = q.question.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = selectedCategory === "all" || q.category === selectedCategory;
-    return matchSearch && matchCategory;
-  });
 
   return (
-    <div style={{ background: C.pageBg, minHeight: "100vh", color: C.textPrimary }}
-      className="py-8 px-4 sm:px-6 font-sans">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Manage Questions</h1>
-            <p style={{ color: C.textMuted }} className="text-sm mt-1">
-              Create, edit, and delete questions for the Daily Questions feature.
-            </p>
+    <div className="min-h-screen bg-[#F8FAFB] font-['Inter',-apple-system,sans-serif] flex">
+      {/* Sidebar (unchanged) */}
+      <aside
+        className={`${
+          sidebarOpen ? "w-64" : "w-0"
+        } lg:w-64 bg-white border-r border-[#E8EDF2] h-screen sticky top-0 flex flex-col transition-all duration-200 overflow-hidden`}
+      >
+        <div className="flex items-center gap-2 px-6 py-5 border-b border-[#E8EDF2]">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0EA472] to-[#059669] flex items-center justify-center text-white font-bold text-sm">
+            A
           </div>
-          <button
-            onClick={() => { resetForm(); setShowModal(true); }}
-            style={{ background: C.violet }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4" /> Add Question
+          <span className="text-base font-bold text-[#0D1B2A] tracking-[-0.3px]">
+            Admin<span className="text-[#0EA472]">Panel</span>
+          </span>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                activeTab === item.id
+                  ? "bg-[#EDF7F3] text-[#0EA472]"
+                  : "text-[#64748B] hover:bg-[#F8FAFB] hover:text-[#0D1B2A]"
+              }`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+              {activeTab === item.id && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-50" />}
+            </button>
+          ))}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-[#E8EDF2]">
+          <button className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F8FAFB] hover:text-red-500 transition">
+            <LogOut className="w-4 h-4" /> Sign out
           </button>
         </div>
+      </aside>
 
-        {/* Search & Filter */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <input
-            type="text"
-            placeholder="Search questions..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              background: C.surface,
-              border: `1px solid ${C.border}`,
-              color: C.textPrimary,
-            }}
-            className="flex-1 min-w-[200px] px-4 py-2 rounded-xl text-sm outline-none focus:ring-1 focus:ring-violet-500"
-          />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            style={{
-              background: C.surface,
-              border: `1px solid ${C.border}`,
-              color: C.textPrimary,
-            }}
-            className="px-4 py-2 rounded-xl text-sm outline-none focus:ring-1 focus:ring-violet-500"
-          >
-            <option value="all">All Categories</option>
-            {CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+      {/* Main Content */}
+      <main className="flex-1 min-h-screen overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-[#E8EDF2] px-6 py-3 flex items-center gap-4 lg:hidden">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 text-[#64748B] hover:text-[#0D1B2A]">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold text-[#0D1B2A]">Admin Panel</h1>
         </div>
 
-        {/* Questions Table */}
-        {loading ? (
-          <div className="text-center py-10" style={{ color: C.textMuted }}>Loading...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ background: C.cardBg, border: `1px solid ${C.border}` }}
-            className="rounded-2xl p-12 text-center">
-            <div className="text-4xl mb-3">📭</div>
-            <p style={{ color: C.textMuted }} className="text-sm">No questions found.</p>
-          </div>
-        ) : (
-          <div style={{ background: C.cardBg, border: `1px solid ${C.border}` }}
-            className="rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Question</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Category</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Difficulty</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Correct</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Status</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium" style={{ color: C.textMuted }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((q) => (
-                    <tr key={q._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td className="px-4 py-3 max-w-xs truncate" style={{ color: C.textPrimary }}>
-                        {q.question}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span style={{
-                          color: C.cyan,
-                          background: C.cyanDim,
-                          border: `1px solid ${C.cyan}25`,
-                        }}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-full">
-                          {q.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span style={{
-                          color: q.difficulty === "easy" ? C.green : q.difficulty === "medium" ? "#F59E0B" : C.red,
-                          background: q.difficulty === "easy" ? C.greenDim : q.difficulty === "medium" ? "rgba(245,158,11,0.12)" : C.redDim,
-                        }}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-full">
-                          {q.difficulty}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs font-mono" style={{ color: C.textMuted }}>{q.correctOption}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span style={{
-                          color: q.isActive ? C.green : C.red,
-                          background: q.isActive ? C.greenDim : C.redDim,
-                        }}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-full">
-                          {q.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => openEdit(q)}
-                            style={{ color: C.textMuted }}
-                            className="p-1 hover:text-white transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(q._id)}
-                            style={{ color: C.textMuted }}
-                            className="p-1 hover:text-red-400 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="p-6">{renderContent()}</div>
+      </main>
+    </div>
+  );
+}
+
+// ─── Dashboard Content ──────────────────────────────────────────────────
+function DashboardContent({ stats, loading }: { stats: DashboardStats; loading: boolean }) {
+  const [dailyData, setDailyData] = useState<{ date: string; count: number }[]>([]);
+  const [chartLoading, setChartLoading] = useState(true);
+
+  // ── Fetch real daily submissions ────────────────────────────────────
+  useEffect(() => {
+    const fetchDailySubmissions = async () => {
+      try {
+        const { data } = await axios.get("/api/admin/stats/submission-daily");
+        
+        if (data.success) {
+          setDailyData(data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch daily submissions:", error);
+      } finally {
+        setChartLoading(false);
+      }
+    };
+    fetchDailySubmissions();
+  }, []);
+
+  // ── Line chart data (real) ──────────────────────────────────────────
+  const lineChartData = {
+    labels: dailyData.map((d) => d.date),
+    datasets: [
+      {
+        label: "Submissions",
+        data: dailyData.map((d) => d.count),
+        borderColor: "#0EA472",
+        backgroundColor: "rgba(14, 164, 114, 0.1)",
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: "#0EA472",
+        pointBorderColor: "#fff",
+        pointBorderWidth: 2,
+      },
+    ],
+  };
+
+  // ── Bar chart data (from stats) ─────────────────────────────────────
+  const barChartData = {
+    labels: ["Users", "Questions", "Workspaces", "Collaborations", "Communities", "Submissions"],
+    datasets: [
+      {
+        label: "Total Count",
+        data: [
+          stats.totalUsers,
+          stats.totalQuestions,
+          stats.totalWorkspaces,
+          stats.totalCollaborations,
+          stats.totalCommunities,
+          stats.totalSubmissions,
+        ],
+        backgroundColor: [
+          "rgba(59, 130, 246, 0.7)",
+          "rgba(139, 92, 246, 0.7)",
+          "rgba(245, 158, 11, 0.7)",
+          "rgba(6, 182, 212, 0.7)",
+          "rgba(16, 185, 129, 0.7)",
+          "rgba(236, 72, 153, 0.7)",
+        ],
+        borderColor: [
+          "#3B82F6",
+          "#8B5CF6",
+          "#F59E0B",
+          "#06B6D4",
+          "#10B981",
+          "#EC4899",
+        ],
+        borderWidth: 2,
+        borderRadius: 4,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        labels: {
+          color: "#0D1B2A",
+          font: { family: "Inter", size: 12 },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { color: "rgba(0,0,0,0.05)" },
+        ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      },
+      y: {
+        grid: { color: "rgba(0,0,0,0.05)" },
+        ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+        beginAtZero: true,
+      },
+    },
+  };
+
+  const statCards = [
+    { label: "Users", value: stats.totalUsers, icon: <Users className="w-5 h-5" />, color: "bg-blue-50 text-blue-600" },
+    { label: "Questions", value: stats.totalQuestions, icon: <BookOpen className="w-5 h-5" />, color: "bg-violet-50 text-violet-600" },
+    { label: "Workspaces", value: stats.totalWorkspaces, icon: <FolderOpen className="w-5 h-5" />, color: "bg-amber-50 text-amber-600" },
+    { label: "Collaborations", value: stats.totalCollaborations, icon: <Briefcase className="w-5 h-5" />, color: "bg-cyan-50 text-cyan-600" },
+    { label: "Communities", value: stats.totalCommunities, icon: <Globe className="w-5 h-5" />, color: "bg-green-50 text-green-600" },
+    { label: "Submissions", value: stats.totalSubmissions, icon: <FileText className="w-5 h-5" />, color: "bg-fuchsia-50 text-fuchsia-600" },
+  ];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-[#0D1B2A] mb-2">Dashboard</h2>
+      <p className="text-sm text-[#64748B] mb-6">Overview of your platform activity.</p>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {statCards.map((card) => (
+          <div key={card.label} className="bg-white border border-[#E8EDF2] rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className={`w-10 h-10 rounded-xl ${card.color} flex items-center justify-center`}>
+                {card.icon}
+              </div>
+              {loading ? (
+                <div className="w-12 h-6 bg-gray-200 animate-pulse rounded" />
+              ) : (
+                <span className="text-2xl font-bold text-[#0D1B2A]">{card.value.toLocaleString()}</span>
+              )}
             </div>
+            <div className="text-sm text-[#64748B] mt-1">{card.label}</div>
           </div>
-        )}
+        ))}
       </div>
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div style={{ background: C.cardBg, border: `1px solid ${C.border}` }}
-            className="w-full max-w-2xl rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center px-6 py-4 border-b" style={{ borderColor: C.border }}>
-              <h2 className="text-lg font-bold">{editing ? "Edit Question" : "Add Question"}</h2>
-              <button onClick={() => { setShowModal(false); resetForm(); }}
-                className="text-gray-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Category</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Question */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Question</label>
-                <textarea
-                  rows={3}
-                  value={form.question}
-                  onChange={(e) => setForm(f => ({ ...f, question: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500 resize-none"
-                  required
-                />
-              </div>
-              {/* Image URL */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Image URL (optional)</label>
-                <input
-                  type="url"
-                  value={form.image}
-                  onChange={(e) => setForm(f => ({ ...f, image: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                  placeholder="https://..."
-                />
-              </div>
-              {/* Options */}
-              <div className="grid grid-cols-2 gap-3">
-                {["A", "B", "C", "D"].map((label, idx) => (
-                  <div key={label}>
-                    <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Option {label}</label>
-                    <input
-                      value={form.options[idx]}
-                      onChange={(e) => {
-                        const newOpts = [...form.options];
-                        newOpts[idx] = e.target.value;
-                        setForm(f => ({ ...f, options: newOpts }));
-                      }}
-                      style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                      className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                      required
-                    />
-                  </div>
-                ))}
-              </div>
-              {/* Correct Option */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Correct Option</label>
-                <select
-                  value={form.correctOption}
-                  onChange={(e) => setForm(f => ({ ...f, correctOption: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                >
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </select>
-              </div>
-              {/* Explanation */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Explanation (optional)</label>
-                <textarea
-                  rows={2}
-                  value={form.explanation}
-                  onChange={(e) => setForm(f => ({ ...f, explanation: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500 resize-none"
-                />
-              </div>
-              {/* Difficulty & Tags */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Difficulty</label>
-                  <select
-                    value={form.difficulty}
-                    onChange={(e) => setForm(f => ({ ...f, difficulty: e.target.value }))}
-                    style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                    className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                  >
-                    {DIFFICULTIES.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Tags (comma separated)</label>
-                  <input
-                    value={form.tags}
-                    onChange={(e) => setForm(f => ({ ...f, tags: e.target.value }))}
-                    style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                    className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                    placeholder="react, arrays"
-                  />
-                </div>
-              </div>
-              {/* Scheduled Date */}
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: C.textMuted }}>Scheduled Date (YYYY-MM-DD, optional)</label>
-                <input
-                  type="date"
-                  value={form.scheduledDate}
-                  onChange={(e) => setForm(f => ({ ...f, scheduledDate: e.target.value }))}
-                  style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.textPrimary }}
-                  className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                />
-              </div>
-              {/* Buttons */}
-              <div className="flex gap-3 pt-4 border-t" style={{ borderColor: C.border }}>
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
-                  className="flex-1 py-2 rounded-lg border" style={{ borderColor: C.border, color: C.textMuted }}>
-                  Cancel
-                </button>
-                <button type="submit"
-                  style={{ background: C.violet }}
-                  className="flex-1 py-2 rounded-lg text-white font-medium hover:opacity-90 transition-opacity">
-                  {editing ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
+      {/* ── Charts ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Line Chart: Submissions per day (REAL DATA) */}
+        <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 shadow-sm">
+          <h3 className="font-semibold text-[#0D1B2A] mb-4">Submissions (Last 7 Days)</h3>
+          <div className="h-64">
+            {chartLoading ? (
+              <div className="h-full flex items-center justify-center text-[#64748B]">Loading chart...</div>
+            ) : (
+              <Line data={lineChartData} options={chartOptions} />
+            )}
           </div>
         </div>
-      )}
+
+        {/* Bar Chart: Platform Activity */}
+        <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 shadow-sm">
+          <h3 className="font-semibold text-[#0D1B2A] mb-4">Platform Activity</h3>
+          <div className="h-64">
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-[#64748B]">Loading chart...</div>
+            ) : (
+              <Bar data={barChartData} options={chartOptions} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity (unchanged) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Submissions */}
+        <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 shadow-sm">
+          <h3 className="font-semibold text-[#0D1B2A] mb-4">Recent Submissions</h3>
+          {stats.recentSubmissions.length === 0 ? (
+            <p className="text-sm text-[#64748B]">No recent submissions.</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.recentSubmissions.slice(0, 5).map((sub) => (
+                <div key={sub._id} className="flex items-center justify-between border-b border-[#E8EDF2] pb-2 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-[#0D1B2A]">{sub.user?.username || "Unknown"}</p>
+                    <p className="text-xs text-[#64748B]">{sub.question?.title || "Question"}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xs font-medium ${sub.isCorrect ? "text-green-600" : "text-red-600"}`}>
+                      {sub.isCorrect ? "✅ Correct" : "❌ Incorrect"}
+                    </span>
+                    <p className="text-xs text-[#64748B]">+{sub.pointsEarned} pts</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Users */}
+        <div className="bg-white border border-[#E8EDF2] rounded-2xl p-5 shadow-sm">
+          <h3 className="font-semibold text-[#0D1B2A] mb-4">Recent Users</h3>
+          {stats.recentUsers.length === 0 ? (
+            <p className="text-sm text-[#64748B]">No recent users.</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.recentUsers.slice(0, 5).map((user) => (
+                <div key={user._id} className="flex items-center justify-between border-b border-[#E8EDF2] pb-2 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-[#0D1B2A]">{user.username}</p>
+                    <p className="text-xs text-[#64748B]">{user.email}</p>
+                  </div>
+                  <span className="text-xs text-[#64748B]">
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

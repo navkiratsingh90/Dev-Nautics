@@ -62,7 +62,7 @@ export interface IUser extends Document {
   totalPoints?: number;
 
   isVerified: boolean;
-
+  role?: "user" | "admin";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,7 +115,11 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: true,
     },
-
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     about: {
       type: String,
       default: "",

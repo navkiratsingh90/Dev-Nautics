@@ -153,7 +153,7 @@ export default function Navbar5() {
             </DropdownMenu>
           ) : (
             <>
-              <Link href="/login">
+              <Link href="/sign-in">
                 <Button
                   variant="ghost"
                   className="rounded-xl text-[#0D1B2A] hover:bg-gray-100"
@@ -161,7 +161,7 @@ export default function Navbar5() {
                   Login
                 </Button>
               </Link>
-              <Link href="/dashboard">
+              <Link href="/sign-up">
                 <Button className="rounded-xl bg-[#0D1B2A] text-white hover:bg-[#1E3A5F]">
                   Get Started
                 </Button>
@@ -263,7 +263,7 @@ export default function Navbar5() {
                   </>
                 ) : (
                   <>
-                    <Link href="/login">
+                    <Link href="/sign-in">
                       <Button
                         variant="ghost"
                         className="w-full justify-start rounded-xl text-[#0D1B2A] hover:bg-gray-100"
@@ -271,7 +271,7 @@ export default function Navbar5() {
                         Login
                       </Button>
                     </Link>
-                    <Link href="/dashboard">
+                    <Link href="/sign-up">
                       <Button className="w-full rounded-xl bg-[#0D1B2A] text-white hover:bg-[#1E3A5F]">
                         Get Started
                       </Button>
