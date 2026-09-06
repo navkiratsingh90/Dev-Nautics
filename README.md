@@ -1,94 +1,87 @@
-# 🚀 Dev-Nautics
+# DevNautics
 
-> A collaborative developer platform designed to help developers **learn, connect, collaborate, share knowledge, and build projects together**.
+DevNautics is a developer skill platform where builders find teammates, run code together, learn through daily challenges, and grow a public track record of what they've shipped.
 
-Dev-Nautics brings multiple developer-focused features into one platform, including coding practice, developer communities, social feeds, project collaboration, workspaces, messaging, and performance tracking.
+## What it does
 
----
+- **Collaborate on real projects** — post an open collaboration with a role list and tech stack, and let others request to join
+- **Team workspaces** — track tasks, timelines, GitHub commits, and calendar events for an ongoing project with your team
+- **Communities** — topic-based spaces with admins, join requests, and live member counts
+- **In-app messaging** — text, media, and file messages per community/discussion thread with delivery and read receipts
+- **Async code execution** — submit code and get results back through a queued execution pipeline instead of blocking the request
+- **Daily assessments** — aptitude, CS fundamentals, puzzles, DSA, and pseudocode questions with per-user submissions and points
+- **Developer profiles** — education, work experience, skills, and a project portfolio for every user
+- **Social feed** — short posts with bookmarks and threaded comments
 
-## 📌 Overview
+## Tech stack
 
-**Dev-Nautics** is a full-stack developer community and collaboration platform built to provide developers with a centralized environment where they can:
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js, TypeScript, Tailwind CSS |
+| Backend | Node.js / Express, Next.js API routes |
+| Database | MongoDB (Mongoose) |
+| Code execution | BullMQ + Redis job queue, Judge0 / Piston |
+| Editor | Monaco Editor |
 
-- 🧑‍💻 Practice programming and technical questions
-- 📊 Track coding performance and points
-- 👥 Create and join developer communities
-- 💬 Communicate through community discussions
-- 🤝 Find developers for collaborative projects
-- 📁 Manage collaborative workspaces
-- 📋 Create and assign tasks
-- 📅 Manage project timelines and events
-- 📰 Share posts and technical content
-- 🔖 Bookmark useful posts
-- 💭 Comment and interact with content
-- 👤 Build detailed developer profiles
-- 🔗 Showcase GitHub and live projects
-- 📈 Monitor submissions and user activity
+## Data model
 
-The goal is to create a **developer-focused ecosystem** rather than just another coding practice or social networking platform.
+The platform is built around these core Mongoose models:
 
----
+- `User` — profile, skills, education, work experience, projects, points
+- `Workspace` — team, tasks, timeline, commits, calendar events
+- `Collaboration` — open project listings with roles wanted and pending requests
+- `Community` — topic spaces with members, admins, and join requests
+- `Message` — per-community/discussion chat with file attachments
+- `Feed` — posts with bookmarks and comments
+- `Question` / `Submission` — daily challenge questions and per-user answers
 
-# ✨ Features
+## Getting started
 
-## 🧑‍💻 Developer Profiles
+\`\`\`bash
+git clone https://github.com/<your-org>/devnautics.git
+cd devnautics
+npm install
+\`\`\`
 
-Every user can create a detailed developer profile containing:
+Create a `.env.local` file:
 
-- Username
-- Email
-- About section
-- Current position
-- Portfolio
-- Education
-- Work experience
-- Technical skills
-- Projects
-- GitHub links
-- Live project links
-- Connected developers
-- Pending connection requests
-- Total points
+\`\`\`env
+MONGODB_URI=your_mongodb_connection_string
+REDIS_URL=your_redis_connection_string
+JWT_SECRET=your_jwt_secret
+PISTON_API_URL=your_piston_or_judge0_endpoint
+\`\`\`
 
-### Skills
+Run the dev server:
 
-Developers can organize their skills into:
+\`\`\`bash
+npm run dev
+\`\`\`
 
-- Frontend
-- Backend
-- Tools
-- Frameworks
-- Libraries
-- Programming Languages
+Open [http://localhost:3000](http://localhost:3000) to view it.
 
----
+## Project structure
 
-# 🧠 Coding Practice
+\`\`\`
+devnautics/
+├── models/          # Mongoose schemas (User, Workspace, Collaboration, ...)
+├── app/ or pages/    # Next.js routes and pages
+├── components/      # Shared UI components
+├── lib/             # DB connection, queue workers, helpers
+└── public/          # Static assets
+\`\`\`
 
-Dev-Nautics provides a question-based coding and technical practice system.
+## Roadmap
 
-Questions can belong to different categories:
+- [ ] Analytics dashboard for workspace activity
+- [ ] Leaderboard seasons and badges
+- [ ] Real-time presence in communities
+- [ ] Public developer profile pages
 
-- Aptitude
-- CS Fundamentals
-- Puzzles
-- DSA
-- Pseudocode
+## Contributing
 
-Each question supports:
+Issues and pull requests are welcome. Please open an issue first for larger changes so we can discuss the approach.
 
-- Four answer options
-- Correct answer
-- Explanation
-- Difficulty
-- Tags
-- Active/inactive status
-- Scheduled date
-- Optional image
+## License
 
-### Difficulty Levels
-
-```text
-Easy
-Medium
-Hard
+MIT
