@@ -6,10 +6,11 @@ import connectDb from '@/lib/db';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { workId: string } }
+  { params }: { params: Promise<{ workId: string }> }
 ) {
   try {
     await connectDb();
+    const {workId} = await params
     const userId = await getUserIdFromRequest(req);
     if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
 
@@ -17,7 +18,7 @@ export async function DELETE(
     if (!user) return NextResponse.json({ msg: 'User not found' }, { status: 404 });
 
     user.workExperience = user.workExperience.filter(
-      (work: any) => work._id.toString() !== params.workId
+      (work: any) => work._id.toString() !== workId
     );
     await user.save();
 

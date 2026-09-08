@@ -41,7 +41,7 @@ interface Activity {
     username: string;
   };
   createdAt: string;
-  bookmark: string[];
+  bookmarks: string[];
   updatedAt?: string;
 }
 

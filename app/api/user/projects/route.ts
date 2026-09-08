@@ -96,16 +96,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest) {
   try {
     await connectDb();
 
-    const { id } = await params;
+    const session = await auth();
 
-    const user = await User.findById(id).select("projects");
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+    const user = await User.findOne({
+      email: session.user.email,
+    }).select("projects");
 
     if (!user) {
       return NextResponse.json(

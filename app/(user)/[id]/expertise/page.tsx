@@ -15,7 +15,8 @@ import {
   Layers,
   Sparkles,
 } from "lucide-react";
-import { ISkills } from "@/types/User";
+import { ISkills } from "@/models/user-model";
+// import { ISkills } from ";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type SkillsMap = ISkills;
@@ -48,7 +49,13 @@ function Modal({ title, subtitle, onClose, children }: {
   );
 }
 
-function SkillChip({ skill, onRemove }: { skill: string; onRemove: () => void }) {
+function SkillChip({
+  skill,
+  onRemove,
+}: {
+  skill: string;
+  onRemove?: () => void;
+}) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-800 text-sm">
       {skill}

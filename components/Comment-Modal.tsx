@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { deleteComment } from "@/services/activity-apis";
+// import { deleteComment } from "@/services/activity-apis";
 import { X, Send, MoreHorizontal, Trash2, MessageCircle } from "lucide-react";
 import axios from "axios";
 

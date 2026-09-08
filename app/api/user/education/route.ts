@@ -79,20 +79,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  await connectDb();
-
-  const { id } = await params;
-
-  const user = await User.findById(id).select("education");
-
-  return NextResponse.json({
-    success: true,
-    education: user?.education || [],
-  });
-}

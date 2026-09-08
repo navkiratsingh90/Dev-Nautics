@@ -167,17 +167,25 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest) {
   try {
     await connectDb();
 
-    const { id } = await params;
+    const session = await auth();
 
-    const user = await User.findById(id).select("skills");
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unauthorized",
+        },
+        { status: 401 }
+      );
+    }
+
+    const user = await User.findOne({
+      email: session.user.email,
+    }).select("skills");
 
     if (!user) {
       return NextResponse.json(
@@ -194,6 +202,8 @@ export async function GET(
       skills: user.skills,
     });
   } catch (error) {
+    console.error("GET SKILLS ERROR:", error);
+
     return NextResponse.json(
       {
         success: false,

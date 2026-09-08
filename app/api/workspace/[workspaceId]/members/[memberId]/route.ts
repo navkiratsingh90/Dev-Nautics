@@ -7,11 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
 // ─── DELETE: Remove a member from workspace (leader only) ──────────
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { workspaceId: string; memberId: string } }
+  { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
   try {
     await connectDb();
-
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -58,7 +57,7 @@ export async function DELETE(
 
     // Remove tasks assigned to this member
     workspace.tasks = workspace.tasks.filter(
-      (task: any) => task.assignedTo?.toString() !== params.memberId
+      (task: any) => task.assignedTo?.toString() !== memberId
     );
 
     await workspace.save();

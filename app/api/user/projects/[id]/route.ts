@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 export async function DELETE(
   req: Request,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
@@ -22,7 +22,7 @@ export async function DELETE(
       );
     }
 
-    const { projectId } = await params;
+    const { id } = await params;
 
     const user = await User.findOne({
       email: session.user.email,
@@ -39,7 +39,7 @@ export async function DELETE(
     }
 
     user.projects = user.projects.filter(
-      (project: any) => project._id.toString() !== projectId
+      (project: any) => project._id.toString() !== id
     );
 
     await user.save();

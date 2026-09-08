@@ -460,7 +460,12 @@ function ProjectModal({
                 <select
                   className="w-full px-3 py-2 border border-[#E8EDF2] rounded-xl"
                   value={form.status}
-                  onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      status: e.target.value as Project["status"],
+                    }))
+                  }
                 >
                   {["Open", "In Progress", "On Hold", "Completed", "Closed"].map(s => (
                     <option key={s}>{s}</option>
@@ -651,16 +656,25 @@ export default function ProjectCollaborationPage() {
     }
   };
 
-  const handleRemoveTeammate = async (id: string, username: string, role: string) => {
+  const handleRemoveTeammate = async (
+    id: string,
+    userId: string,
+    username: string
+  ) => {
     if (!window.confirm(`Remove ${username} from the team?`)) return;
+  
     try {
-      const updatedProject = await removeTeammate(id, username, role);
+      const updatedProject = await removeTeammate(id, userId);
+  
       setProjects((prev) =>
         prev.map((p) => (p._id === updatedProject._id ? updatedProject : p))
       );
+  
       toast.success("Teammate removed");
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to remove teammate");
+      toast.error(
+        error.response?.data?.message || "Failed to remove teammate"
+      );
     }
   };
 

@@ -102,7 +102,16 @@ function EditModal({ project, onClose, onSave }: { project: Project; onClose: ()
         </div>
         <div>
           <label className="block text-sm font-medium text-[#0D1B2A] mb-1">Status</label>
-          <select className="w-full px-3 py-2 border border-[#E8EDF2] rounded-xl" value={status} onChange={e => setStatus(e.target.value)}>
+          <select className="w-full px-3 py-2 border border-[#E8EDF2] rounded-xl" value={status} onChange={e =>
+                  setStatus(
+                    e.target.value as
+                      | "Open"
+                      | "In Progress"
+                      | "On Hold"
+                      | "Completed"
+                      | "Closed"
+                  )
+                }>
             {Object.keys(statusMeta).map(s => <option key={s}>{s}</option>)}
           </select>
         </div>

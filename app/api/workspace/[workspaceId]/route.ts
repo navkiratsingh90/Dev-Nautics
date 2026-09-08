@@ -83,7 +83,7 @@ export async function GET(
 // ─── PUT: Update workspace (leader only) ─────────────────────────────
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     await connectDb();
@@ -155,7 +155,7 @@ export async function PUT(
 // ─── DELETE: Delete workspace (leader only) ─────────────────────────
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { workspaceId : string } }
+  { params }: { params: Promise<{ workspaceId : string }> }
 ) {
   try {
     await connectDb();

@@ -84,7 +84,7 @@ export async function PUT(
 // ─── DELETE: Delete a task (leader or task owner) ──────────────────
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { workspaceId: string; taskId: string } }
+  { params }: { params: Promise<{ workspaceId: string; taskId: string }> }
 ) {
   try {
     await connectDb();

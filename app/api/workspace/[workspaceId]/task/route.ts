@@ -58,7 +58,7 @@ export async function GET(
 // ─── POST: Assign a new task (leader only) ──────────────────────────
 export async function POST(
   req: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     await connectDb();
