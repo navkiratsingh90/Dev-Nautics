@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ─── POST: Send join request email and store in DB ──────────────────
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
@@ -102,7 +102,7 @@ export async function POST(
 // ─── DELETE: Cancel join request ──────────────────────────────────────
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();

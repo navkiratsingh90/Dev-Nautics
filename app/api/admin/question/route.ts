@@ -1,9 +1,7 @@
-// app/api/admin/question/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import connectDb from "@/lib/db";
 import Question from "@/models/question-model";
 import User from "@/models/user-model";
-import { BASE_POINTS, PENALTY_POINTS } from "@/lib/points-helper";
 import { auth } from "@/auth";
 
 export async function POST(req: NextRequest) {
@@ -11,98 +9,149 @@ export async function POST(req: NextRequest) {
     await connectDb();
 
     const session = await auth();
+
     if (!session?.user?.email) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
+        {
+          success: false,
+          message: "Unauthorized",
+        },
         { status: 401 }
       );
     }
 
-    const user = await User.findOne({ email: session.user.email });
+    const user = await User.findOne({
+      email: session.user.email,
+    });
+
     if (!user) {
       return NextResponse.json(
-        { success: false, message: "User not found" },
+        {
+          success: false,
+          message: "User not found",
+        },
         { status: 404 }
       );
     }
 
-    // Check if user is admin – adjust based on your User model
     if (!user.isAdmin) {
       return NextResponse.json(
-        { success: false, message: "Forbidden: Admin access required" },
+        {
+          success: false,
+          message: "Forbidden: Admin access required",
+        },
         { status: 403 }
       );
     }
 
     const {
-      title,
-      description,
-      type,
-      difficulty,
-      scheduledDate,
+      category,
+      question,
+      image,
       options,
       correctOption,
-      testCases,
-      starterCode,
-      supportedLangs,
-      correctAnswer,
       explanation,
+      difficulty,
       tags,
+      isActive,
+      scheduledDate,
     } = await req.json();
 
     // Validate required fields
-    if (!title || !description || !type || !difficulty || !scheduledDate) {
+    if (!category || !question || !options || !correctOption) {
       return NextResponse.json(
-        { success: false, message: "Missing required fields" },
+        {
+          success: false,
+          message: "Category, question, options and correctOption are required",
+        },
         { status: 400 }
       );
     }
 
-    // Validate type-specific fields
-    if (type === "mcq" && (!options || !correctOption)) {
+    // Validate category
+    const validCategories = [
+      "aptitude",
+      "cs_fundamental",
+      "puzzle",
+      "dsa",
+      "pseudo",
+    ];
+
+    if (!validCategories.includes(category)) {
       return NextResponse.json(
-        { success: false, message: "MCQ requires options and correctOption" },
-        { status: 400 }
-      );
-    }
-    if (type === "coding" && !testCases) {
-      return NextResponse.json(
-        { success: false, message: "Coding questions require testCases" },
-        { status: 400 }
-      );
-    }
-    if ((type === "puzzle" || type === "cs_fundamental") && !correctAnswer) {
-      return NextResponse.json(
-        { success: false, message: "Puzzle/CS questions require correctAnswer" },
+        {
+          success: false,
+          message: "Invalid category",
+        },
         { status: 400 }
       );
     }
 
-    const question = await Question.create({
-      title,
-      description,
-      type,
-      difficulty,
-      scheduledDate,
-      basePoints: BASE_POINTS[difficulty],
-      penaltyPoints: PENALTY_POINTS[difficulty],
-      options: type === "mcq" ? options : undefined,
-      correctOption: type === "mcq" ? correctOption : undefined,
-      testCases: type === "coding" ? testCases : undefined,
-      starterCode: type === "coding" ? starterCode : undefined,
-      supportedLangs: type === "coding" ? (supportedLangs || ["python", "javascript", "cpp"]) : undefined,
-      correctAnswer: (type === "puzzle" || type === "cs_fundamental") ? correctAnswer : undefined,
-      explanation: (type === "puzzle" || type === "cs_fundamental") ? explanation : undefined,
+    // Validate options
+    if (!Array.isArray(options) || options.length !== 4) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Options must contain exactly 4 items",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate correct option
+    if (!["A", "B", "C", "D"].includes(correctOption)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "correctOption must be A, B, C or D",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate difficulty
+    if (
+      difficulty &&
+      !["easy", "medium", "hard"].includes(difficulty)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid difficulty",
+        },
+        { status: 400 }
+      );
+    }
+
+    const newQuestion = await Question.create({
+      category,
+      question,
+      image: image || undefined,
+      options,
+      correctOption,
+      explanation: explanation || undefined,
+      difficulty: difficulty || "medium",
       tags: tags || [],
+      isActive: isActive !== undefined ? isActive : true,
+      scheduledDate: scheduledDate || undefined,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: question,
-    }, { status: 201 });
-  } catch (err: any) {
     return NextResponse.json(
-      { success: false, message: err.message },
+      {
+        success: true,
+        message: "Question created successfully",
+        data: newQuestion,
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("Create question error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message || "Failed to create question",
+      },
       { status: 500 }
     );
   }

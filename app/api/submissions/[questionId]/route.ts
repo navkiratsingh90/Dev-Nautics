@@ -6,11 +6,11 @@ import { auth } from "@/auth";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { questionId: string } }
+  { params }: { params: Promise<{ questionId: string }> }
 ) {
   try {
     await connectDb();
-
+    const {questionId} = await params
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -29,7 +29,7 @@ export async function GET(
 
     const submission = await Submission.findOne({
       user: currentUser._id,
-      question: params.questionId,
+      question: questionId,
     });
 
     return NextResponse.json({

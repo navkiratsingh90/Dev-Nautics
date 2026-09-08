@@ -5,18 +5,24 @@ import { auth } from "@/auth";
 
 async function isAdmin() {
   const session = await auth();
+
   if (!session?.user?.email) return false;
-  const user = await User.findOne({ email: session.user.email });
+
+  const user = await User.findOne({
+    email: session.user.email,
+  });
+
   return user?.role === "admin";
 }
 
-// ─── GET: Fetch a single user (admin only) ──────────────────────────
+// GET: Fetch a single user (admin only)
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
+
     if (!(await isAdmin())) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -24,7 +30,9 @@ export async function GET(
       );
     }
 
-    const user = await User.findById(params.id)
+    const { id } = await params;
+
+    const user = await User.findById(id)
       .select("-password -verificationCode -verificationExpiry")
       .lean();
 
@@ -38,6 +46,7 @@ export async function GET(
     return NextResponse.json({ success: true, data: user });
   } catch (error: any) {
     console.error("GET USER ERROR:", error);
+
     return NextResponse.json(
       { success: false, message: "Internal Server Error" },
       { status: 500 }
@@ -45,13 +54,14 @@ export async function GET(
   }
 }
 
-// ─── PUT: Update a user (admin only) ────────────────────────────────
+// PUT: Update a user (admin only)
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
+
     // if (!(await isAdmin())) {
     //   return NextResponse.json(
     //     { success: false, message: "Unauthorized" },
@@ -59,10 +69,22 @@ export async function PUT(
     //   );
     // }
 
-    const body = await req.json();
-    const { username, email, position, portfolio, about, isVerified, role } = body;
+    const { id } = await params;
 
-    const user = await User.findById(params.id);
+    const body = await req.json();
+
+    const {
+      username,
+      email,
+      position,
+      portfolio,
+      about,
+      isVerified,
+      role,
+    } = body;
+
+    const user = await User.findById(id);
+
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
@@ -70,18 +92,20 @@ export async function PUT(
       );
     }
 
-    // Update allowed fields
     if (username !== undefined) user.username = username;
     if (email !== undefined) user.email = email;
     if (position !== undefined) user.position = position;
     if (portfolio !== undefined) user.portfolio = portfolio;
     if (about !== undefined) user.about = about;
     if (isVerified !== undefined) user.isVerified = isVerified;
-    if (role !== undefined && ["user", "admin"].includes(role)) user.role = role;
+    if (role !== undefined && ["user", "admin"].includes(role)) {
+      user.role = role;
+    }
 
     await user.save();
 
     const updated = user.toObject();
+
     delete updated.password;
     delete updated.verificationCode;
     delete updated.verificationExpiry;
@@ -93,6 +117,7 @@ export async function PUT(
     });
   } catch (error: any) {
     console.error("UPDATE USER ERROR:", error);
+
     return NextResponse.json(
       { success: false, message: "Internal Server Error" },
       { status: 500 }
@@ -100,13 +125,14 @@ export async function PUT(
   }
 }
 
-// ─── DELETE: Delete a user (admin only) ──────────────────────────────
+// DELETE: Delete a user (admin only)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
+
     if (!(await isAdmin())) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -114,7 +140,10 @@ export async function DELETE(
       );
     }
 
-    const user = await User.findById(params.id);
+    const { id } = await params;
+
+    const user = await User.findById(id);
+
     if (!user) {
       return NextResponse.json(
         { success: false, message: "User not found" },
@@ -141,6 +170,7 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error("DELETE USER ERROR:", error);
+
     return NextResponse.json(
       { success: false, message: "Internal Server Error" },
       { status: 500 }

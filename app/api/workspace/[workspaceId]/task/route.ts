@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ─── GET: Get tasks assigned to the authenticated user ─────────────
 export async function GET(
   req: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     await connectDb();

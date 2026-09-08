@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import { ProjectTracker } from '@/models/ProjectTracker';
+
+import Workspace from "@/models/workspace-model";
 import { getUserIdFromRequest } from '@/lib/auth';
+import connectDb from '@/lib/db';
 
 /**
  * PATCH /api/projects/:projectId/members
@@ -29,9 +30,9 @@ export async function PATCH(
       );
     }
 
-    await dbConnect();
+    await connectDb();
 
-    const project = await ProjectTracker.findById(projectId);
+    const project = await Workspace.findById(projectId);
     if (!project) {
       return NextResponse.json(
         { msg: 'Project not found.' },
@@ -40,7 +41,7 @@ export async function PATCH(
     }
 
     // Authorization: only leader can modify members
-    if (project.leader.toString() !== userId.toString()) {
+    if (project.leader.toString() !== userId?.toString()) {
       return NextResponse.json(
         { msg: 'Only the project leader can modify members.' },
         { status: 403 }

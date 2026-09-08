@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ─── PUT: Mark task as completed (task owner only) ──────────────────
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { workspaceId: string; taskId: string } }
+  { params }: { params: Promise<{ workspaceId: string; taskId: string }> }
 ) {
   try {
     await connectDb();

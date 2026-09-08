@@ -6,30 +6,44 @@ import { auth } from "@/auth";
 
 async function isAdmin() {
   const session = await auth();
+
   if (!session?.user?.email) return false;
-  const user = await User.findOne({ email: session.user.email });
+
+  const user = await User.findOne({
+    email: session.user.email,
+  });
+
   return user?.role === "admin";
 }
 
-// ─── DELETE: Delete a community ──────────────────────────────────────
+// DELETE: Delete a community
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDb();
 
     if (!(await isAdmin())) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized. Admin access required." },
+        {
+          success: false,
+          message: "Unauthorized. Admin access required.",
+        },
         { status: 403 }
       );
     }
 
-    const community = await Community.findById(params.id);
+    const { id } = await params;
+
+    const community = await Community.findById(id);
+
     if (!community) {
       return NextResponse.json(
-        { success: false, message: "Community not found." },
+        {
+          success: false,
+          message: "Community not found.",
+        },
         { status: 404 }
       );
     }
@@ -42,8 +56,12 @@ export async function DELETE(
     });
   } catch (error: any) {
     console.error("DELETE COMMUNITY ERROR:", error);
+
     return NextResponse.json(
-      { success: false, message: "Internal Server Error" },
+      {
+        success: false,
+        message: "Internal Server Error",
+      },
       { status: 500 }
     );
   }

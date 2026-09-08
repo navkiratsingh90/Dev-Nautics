@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dbConnect } from '@/lib/dbConnect';
+
 import { getUserIdFromRequest } from '@/lib/auth';
 import User from '@/models/user-model';
+import connectDb from '@/lib/db';
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { workId: string } }
 ) {
   try {
-    await dbConnect();
+    await connectDb();
     const userId = await getUserIdFromRequest(req);
     if (!userId) return NextResponse.json({ msg: 'Unauthorized' }, { status: 401 });
 

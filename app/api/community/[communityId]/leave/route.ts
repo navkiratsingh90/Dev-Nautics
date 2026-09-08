@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ communityId: string }> }
 ) {
   try {
     await connectDb();
@@ -38,9 +38,9 @@ export async function POST(
       );
     }
 
-    const { id } = await params;
+    const { communityId } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(communityId)) {
       return NextResponse.json(
         {
           success: false,
@@ -50,7 +50,7 @@ export async function POST(
       );
     }
 
-    const community = await Community.findById(id);
+    const community = await Community.findById(communityId);
 
     if (!community) {
       return NextResponse.json(

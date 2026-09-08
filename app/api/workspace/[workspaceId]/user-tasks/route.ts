@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/dbConnect';
-import { ProjectTracker } from '@/models/ProjectTracker';
+
+import Workspace from "@/models/workspace-model";
 import { getUserIdFromRequest } from '@/lib/auth';
+import connectDb from '@/lib/db';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const { projectId } = await params;
+    const { workspaceId } = await params;
     const userId = await getUserIdFromRequest(req);
 
     if (!userId) {
@@ -18,9 +19,9 @@ export async function GET(
       );
     }
 
-    await dbConnect();
+    await connectDb();
 
-    const currProject = await ProjectTracker.findById(projectId);
+    const currProject = await Workspace.findById(workspaceId);
     if (!currProject) {
       return NextResponse.json(
         { msg: 'Project not found.' },

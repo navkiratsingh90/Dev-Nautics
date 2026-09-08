@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import dbConnect from '@/lib/dbConnect';
+
 import Workspace from '@/models/workspace-model';
+import connectDb from '@/lib/db';
 // import { getUserIdFromRequest } from '@/lib/auth';
 
 export async function POST(
@@ -30,7 +31,7 @@ export async function POST(
       );
     }
 
-    // await dbConnect();
+    await connectDb();
 
     const currProject = await Workspace.findById(projectId);
     if (!currProject) {

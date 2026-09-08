@@ -7,11 +7,10 @@ import { NextRequest, NextResponse } from "next/server";
 // ─── POST: Add members to workspace (leader only) ──────────────────
 export async function POST(
   req: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     await connectDb();
-
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json(
