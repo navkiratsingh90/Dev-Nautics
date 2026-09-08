@@ -160,29 +160,6 @@ const TestimonialCard = ({ name, role, avatar, text, tag }: TestimonialProps) =>
   </div>
 );
 
-const PricingCard = ({ name, price, period, description, features, cta, highlight }: PricingPlanProps) => (
-  <div className={`bg-white border rounded-2xl p-7 flex flex-col ${highlight ? 'border-[#0EA472]' : 'border-[#E8EDF2]'}`}>
-    {highlight && (
-      <div className="mb-4 text-[11px] font-semibold text-[#0EA472] uppercase tracking-wide">Most Popular</div>
-    )}
-    <h3 className="text-xl font-bold text-[#0D1B2A] m-0 mb-1">{name}</h3>
-    <p className="text-[13px] text-[#64748B] mb-4">{description}</p>
-    <div className="flex items-baseline gap-1 mb-6">
-      <span className="text-3xl font-extrabold text-[#0D1B2A]">{price}</span>
-      <span className="text-[13px] text-[#64748B]">{period}</span>
-    </div>
-    <ul className="space-y-2.5 flex-1 mb-7">
-      {features.map((feature) => (
-        <li key={feature} className="text-[13px] text-[#64748B] flex items-start gap-2">
-          <span className="text-[#0EA472] shrink-0 mt-0.5">✓</span> {feature}
-        </li>
-      ))}
-    </ul>
-    <button className={`w-full py-3 rounded-xl text-[13px] font-semibold ${highlight ? 'bg-[#0D1B2A] text-white' : 'bg-white text-[#0D1B2A] border border-[#E8EDF2]'}`}>
-      {cta}
-    </button>
-  </div>
-);
 
 const techStack = [
   { name: "TypeScript", color: "#3178C6" },
@@ -213,10 +190,8 @@ export default function DevConnectLanding() {
 
   const features: FeatureCardProps[] = [
     { title: "Code & Decode", description: "Daily coding challenges, contests, and puzzles to sharpen your problem-solving skills.", icon: <CodeIcon /> },
-    { title: "Smart Project Matching", description: "AI-powered algorithm to find perfect collaborators based on skills, experience, and availability.", icon: <SearchIcon /> },
     { title: "Active Posting", description: "Share your projects, ideas, and knowledge with a targeted developer community.", icon: <ChatIcon /> },
     { title: "Real-time Chatrooms", description: "Topic-based chatrooms to discuss technologies, get help, and network instantly.", icon: <ChatIcon /> },
-    { title: "Event Promotion", description: "Discover and promote tech events, hackathons, and meetups in your area.", icon: <CalendarIcon /> },
     { title: "Find Similar People", description: "Connect with developers who share your interests and tech stack for collaboration.", icon: <UsersIcon /> },
     { title: "Project Collaboration", description: "Find team members for your projects or join exciting new initiatives.", icon: <HandshakeIcon /> },
     { title: "Learning Resources", description: "Access curated learning materials and share knowledge with peers.", icon: <BookIcon /> },
@@ -231,22 +206,14 @@ export default function DevConnectLanding() {
 
   const steps: StepProps[] = [
     { number: "01", title: "Create your profile", description: "Showcase your skills, tech stack, and portfolio. Let the community know what you're building.", icon: <UsersIcon /> },
-    { number: "02", title: "Discover your match", description: "Our AI engine scans thousands of profiles to surface relevant collaborators and challenges.", icon: <SearchIcon /> },
+    { number: "02", title: "Discover your match", description: "Our Interface helps you to contact relevant collaborators and challenges.", icon: <SearchIcon /> },
     { number: "03", title: "Collaborate & compete", description: "Join live chatrooms, accept project invites, tackle daily coding puzzles, and build real things.", icon: <HandshakeIcon /> },
-    { number: "04", title: "Grow your reputation", description: "Earn badges, climb leaderboards, and build a portfolio of shipped projects.", icon: <RocketIcon /> },
+    { number: "04", title: "Grow your Skill", description: "Solve Daily face-offs and build a portfolio of shipped projects.", icon: <RocketIcon /> },
   ];
 
   const testimonials: TestimonialProps[] = [
-    { name: "Arjun Mehta", role: "Full-Stack Developer", avatar: "AM", text: "DevConnect helped me find my co-founder in 3 days. The matching algorithm actually understood my tech stack.", tag: "Project Matching" },
-    { name: "Sarah Chen", role: "ML Engineer @ Stripe", avatar: "SC", text: "The daily coding challenges are genuinely hard in the right way. I've improved more in 2 months here.", tag: "Code & Decode" },
-    { name: "Marcus Johnson", role: "Open Source Contributor", avatar: "MJ", text: "I found three collaborators for my open-source CLI tool within a week. The chatrooms are super focused.", tag: "Collaboration" },
-    { name: "Priya Sharma", role: "Frontend Engineer", avatar: "PS", text: "Promoted my local React meetup and got 40+ RSVPs from the platform. The event tools are genuinely useful.", tag: "Events" },
-  ];
-
-  const pricingPlans: PricingPlanProps[] = [
-    { name: "Starter", price: "Free", period: "", description: "For developers just getting started", features: ["5 project postings/month", "Join up to 3 chatrooms", "Daily challenges", "Community feed access", "Basic profile"], cta: "Get Started", highlight: false },
-    { name: "Pro", price: "₹499", period: "/month", description: "For serious builders & collaborators", features: ["Unlimited project postings", "All chatrooms + create your own", "Priority AI matching", "Event promotion tools", "Badge & leaderboard access", "Analytics dashboard"], cta: "Start Pro Trial", highlight: true },
-    { name: "Team", price: "₹1,999", period: "/month", description: "For dev teams & organizations", features: ["Everything in Pro", "Up to 15 team members", "Private team chatrooms", "Custom hackathon hosting", "Dedicated support", "API access"], cta: "Contact Sales", highlight: false },
+    { name: "Navkirat Singh", role: "Full-Stack Developer", avatar: "NS", text: "DevConnect helped me find my co-founder in 3 days. The matching algorithm actually understood my tech stack.", tag: "Project Matching" },
+    { name: "Cat", role: "Cat Developer", avatar: "CT", text: "The daily coding challenges are genuinely hard in the right way. I've improved more in 2 months here.", tag: "Code & Decode" },
   ];
 
   return (
@@ -259,7 +226,7 @@ export default function DevConnectLanding() {
         <div>
           <div className="inline-flex items-center gap-1.5 bg-[#EDF7F3] border border-[#A7F3D0] rounded-full py-1.5 px-3 mb-6">
             <div className="w-1.5 h-1.5 rounded-full bg-[#0EA472]" />
-            <span className="text-xs font-medium text-[#047857]">TRUSTED BY 50,000+ DEVELOPERS</span>
+            <span className="text-xs font-medium text-[#047857]">TRUSTED BY 2+ DEVELOPERS</span>
           </div>
           <h1 className="m-0 mb-5 text-[52px] font-extrabold text-[#0D1B2A] leading-tight tracking-[-1.5px]">
             Where Developers<br />
@@ -269,11 +236,11 @@ export default function DevConnectLanding() {
             The all-in-one platform to collaborate on projects, compete in coding challenges, discover events, and build meaningful professional connections.
           </p>
           <div className="flex gap-3 mb-12">
-            <Link href="/join" className="inline-flex items-center gap-2 bg-[#0D1B2A] text-white no-underline py-3.5 px-6 rounded-xl text-sm font-semibold hover:bg-[#1E3A5F]">
+            <Link href="/sign-up" className="inline-flex items-center gap-2 bg-[#0D1B2A] text-white no-underline py-3.5 px-6 rounded-xl text-sm font-semibold hover:bg-[#1E3A5F]">
               Join for Free
               <ArrowRight />
             </Link>
-            <Link href="/features" className="inline-flex items-center gap-2 bg-white text-[#0D1B2A] no-underline py-3.5 px-6 rounded-xl text-sm font-medium border border-[#E8EDF2] hover:bg-gray-50">
+            <Link href="/code-decode" className="inline-flex items-center gap-2 bg-white text-[#0D1B2A] no-underline py-3.5 px-6 rounded-xl text-sm font-medium border border-[#E8EDF2] hover:bg-gray-50">
               Explore Features
             </Link>
           </div>
@@ -332,7 +299,7 @@ export default function DevConnectLanding() {
             A complete ecosystem built for developers who want to ship, learn, and collaborate faster.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {features.map((feature, idx) => (
             <FeatureCard key={idx} {...feature} />
           ))}
@@ -354,26 +321,14 @@ export default function DevConnectLanding() {
             </div>
           </div>
           <div className="bg-[#F8FAFB] border border-[#E8EDF2] rounded-2xl p-8">
-            <p className="m-0 mb-5 text-[13px] font-semibold text-[#0D1B2A]">Sample AI Match</p>
+            <p className="m-0 mb-5 text-[13px] font-semibold text-[#0D1B2A]">Sample Profiles</p>
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-[#E8EDF2]">
                 <div className="w-10 h-10 rounded-full bg-[#EDF7F3] flex items-center justify-center text-[#0EA472]">JS</div>
                 <div>
-                  <p className="text-[13px] font-semibold text-[#0D1B2A] m-0">Sarah Chen</p>
-                  <p className="text-[11px] text-[#64748B] m-0">React · TypeScript · 92% match</p>
+                  <p className="text-[13px] font-semibold text-[#0D1B2A] m-0">Navkirat Singh</p>
+                  <p className="text-[11px] text-[#64748B] m-0">React · TypeScript </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-[#E8EDF2]">
-                <div className="w-10 h-10 rounded-full bg-[#EDF7F3] flex items-center justify-center text-[#0EA472]">PY</div>
-                <div>
-                  <p className="text-[13px] font-semibold text-[#0D1B2A] m-0">Arjun Mehta</p>
-                  <p className="text-[11px] text-[#64748B] m-0">Python · FastAPI · 88% match</p>
-                </div>
-              </div>
-              <div className="bg-[#EDF7F3] rounded-xl p-4 mt-4">
-                <p className="text-[12px] text-[#064E3B] leading-relaxed m-0">
-                  🤖 Based on your skills (React, Node.js) and recent projects, we found 12 potential collaborators. Start a chatroom to discuss project ideas.
-                </p>
               </div>
             </div>
           </div>
@@ -394,24 +349,6 @@ export default function DevConnectLanding() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {testimonials.map((t, i) => (
             <TestimonialCard key={i} {...t} />
-          ))}
-        </div>
-      </section>
-
-      {/* ── Pricing ── */}
-      <section className="py-24 px-12 max-w-[1200px] mx-auto bg-white border-y border-[#E8EDF2]">
-        <div className="text-center mb-14">
-          <p className="m-0 mb-2 text-xs font-semibold text-[#0EA472] tracking-[0.08em]">PRICING</p>
-          <h2 className="m-0 mb-3 text-4xl font-extrabold text-[#0D1B2A] tracking-[-0.8px]">
-            Simple, transparent <span className="text-[#0EA472]">pricing</span>
-          </h2>
-          <p className="m-0 mx-auto text-[15px] text-[#64748B] max-w-[500px] leading-relaxed">
-            Start free. Scale as you grow. No hidden fees, ever.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {pricingPlans.map((plan, i) => (
-            <PricingCard key={i} {...plan} />
           ))}
         </div>
       </section>

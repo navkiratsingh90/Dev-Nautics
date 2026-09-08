@@ -394,29 +394,6 @@ export default function DailyQuestionsPage() {
           ))}
         </div>
 
-        {/* ── Navigation dots ────────────────────────────────────── */}
-        {total > 1 && (
-          <div className="flex justify-center gap-1.5 mt-6">
-            {questions.map((_, idx) => {
-              const q = questions[idx];
-              const isAnswered = revealed[q._id] !== undefined;
-              const isCorrect = isAnswered && selectedAnswers[q._id] === q.correctOption;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`w-2 h-2 rounded-full transition ${
-                    idx === currentIndex
-                      ? "bg-[#0D1B2A]"
-                      : isAnswered
-                        ? isCorrect ? "bg-green-500" : "bg-red-500"
-                        : "bg-[#E8EDF2]"
-                  }`}
-                />
-              );
-            })}
-          </div>
-        )}
       </div>
     </div>
   );

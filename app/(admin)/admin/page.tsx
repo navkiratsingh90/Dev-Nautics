@@ -122,60 +122,11 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFB] font-['Inter',-apple-system,sans-serif] flex">
-      {/* Sidebar (unchanged) */}
-      <aside
-        className={`${
-          sidebarOpen ? "w-64" : "w-0"
-        } lg:w-64 bg-white border-r border-[#E8EDF2] h-screen sticky top-0 flex flex-col transition-all duration-200 overflow-hidden`}
-      >
-        <div className="flex items-center gap-2 px-6 py-5 border-b border-[#E8EDF2]">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0EA472] to-[#059669] flex items-center justify-center text-white font-bold text-sm">
-            A
-          </div>
-          <span className="text-base font-bold text-[#0D1B2A] tracking-[-0.3px]">
-            Admin<span className="text-[#0EA472]">Panel</span>
-          </span>
-        </div>
+    <div className="min-h-screen bg-gray-50 px-4 py-8 font-sans sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl space-y-6">
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                activeTab === item.id
-                  ? "bg-[#EDF7F3] text-[#0EA472]"
-                  : "text-[#64748B] hover:bg-[#F8FAFB] hover:text-[#0D1B2A]"
-              }`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {activeTab === item.id && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-50" />}
-            </button>
-          ))}
-        </nav>
-
-        <div className="px-3 py-4 border-t border-[#E8EDF2]">
-          <button className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-[#64748B] hover:bg-[#F8FAFB] hover:text-red-500 transition">
-            <LogOut className="w-4 h-4" /> Sign out
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 min-h-screen overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-white border-b border-[#E8EDF2] px-6 py-3 flex items-center gap-4 lg:hidden">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 text-[#64748B] hover:text-[#0D1B2A]">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <h1 className="text-lg font-bold text-[#0D1B2A]">Admin Panel</h1>
-        </div>
-
-        <div className="p-6">{renderContent()}</div>
-      </main>
+     <DashboardContent stats={stats} loading={false}/>
+     </div>
     </div>
   );
 }

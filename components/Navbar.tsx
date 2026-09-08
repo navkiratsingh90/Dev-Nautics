@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RootState } from "@/redux/store";
 import { IUser } from "@/models/user-model";
+import { signOut } from "next-auth/react";
 
 interface Feature {
   title: string;
@@ -148,7 +149,11 @@ export default function Navbar5() {
                 <DropdownMenuItem asChild>
                   <Link href={`${userData._id}`}>Profile</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: "/sign-in" })}
+              >
+                Logout
+              </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
@@ -256,6 +261,7 @@ export default function Navbar5() {
                     </Link>
 
                     <button
+                    onClick={() => signOut({ callbackUrl: "/sign-" })}
                       className="w-full text-left py-2 px-3 rounded-xl text-sm transition text-[#64748B] hover:text-[#0D1B2A] hover:bg-gray-100"
                     >
                       Logout

@@ -12,11 +12,14 @@ const transporter = nodemailer.createTransport({
 // ─── Simple OTP email (existing) ─────────────────────────────────────
 export const sendMail = async (to_person: string, currSubject: string) => {
   try {
+    console.log("otp sent" , to_person , currSubject , process.env.GMAIL_FROM);
+    
     await transporter.sendMail({
-      to: `"Fleeter" ${to_person}`,
+      to: to_person,
       from: process.env.GMAIL_FROM,
-      subject: `your 6 digit otp is ${currSubject}`,
+      subject: `Your 6 digit OTP is ${currSubject}`,
     });
+
     return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
@@ -26,6 +29,8 @@ export const sendMail = async (to_person: string, currSubject: string) => {
 
 // ─── Pickup OTP email (existing) ────────────────────────────────────
 export const sendPickupOtp = async (email: string, otp: string) => {
+  console.log("otp sent");
+  
   await transporter.sendMail({
     from: process.env.GMAIL_FROM,
     to: email,
