@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const currentUser = await User.findOne({ email: session.user.email });
-    if (!currentUser || currentUser.username !== "navkirat1") {
+    if (!currentUser || currentUser.role !== "admin") {
       return NextResponse.json(
         { success: false, message: "Admin access required" },
         { status: 403 }
