@@ -30,8 +30,8 @@ function normalizeId(value: MemberRef | undefined | null): string {
   return value._id || "";
 }
 
-function getSenderName(sender: MemberRef) {
-  if (typeof sender === "string") return "User";
+function getSenderName(sender: MemberRef | null) {
+  if (!sender || typeof sender === "string") return "User";
   return sender.username || "User";
 }
 
@@ -68,6 +68,8 @@ function Avatar({ name, emoji }: { name: string; emoji?: string | null }) {
 }
 
 export function MessageBubble({ msg, showSender, onCopy }: { msg: Message; showSender: boolean; onCopy: (t: string) => void }) {
+  // console.log(msg);
+  
   const senderName = getSenderName(msg.senderId);
 
   return (

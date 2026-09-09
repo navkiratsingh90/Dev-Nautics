@@ -11,7 +11,7 @@ interface Community {
   communityName: string;
   file?: string;
   onlineMembers: number;
-  totalMembers: number;
+  joinedMembers: string[];
 }
 
 function Avatar({ name, emoji }: { name: string; emoji?: string | null }) {
@@ -55,7 +55,7 @@ export function ChatHeader({
         <div>
           <h2 className="font-semibold text-gray-900">{community.communityName}</h2>
           <div className="text-xs text-gray-500">
-            {community.onlineMembers} online · {community.totalMembers} members
+            {community.joinedMembers.length} members
           </div>
         </div>
       </div>

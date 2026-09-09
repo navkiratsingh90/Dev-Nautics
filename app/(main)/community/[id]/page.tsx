@@ -92,6 +92,8 @@ export default function ChatPage() {
 
   const fetchMessages = async () => {
     const { data } = await axios.get(`/api/messages/${communityId}`);
+    console.log(data);
+    
     const messagesData: Message[] = data.messages || [];
     const withMe = messagesData.map((msg) => ({
       ...msg,
