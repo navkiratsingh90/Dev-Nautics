@@ -15,7 +15,27 @@ import { MessageInput } from "@/components/MessageInput";
 import { MessageBubble } from "@/components/MessageBubble";
 
 // ─── Types ──────────────────────────────────────────────────────────────
-type MemberRef = { _id?: string; username?: string };
+type MemberRef = {
+  _id?: string;
+  username?: string;
+};
+
+interface Community {
+  _id: string;
+  communityName: string;
+  slug: string;
+  totalMembers: number;
+  onlineMembers: number;
+  createdBy: MemberRef;
+  joinedMembers: MemberRef[];
+  admins: MemberRef[];
+  pendingRequests: MemberRef[];
+  file?: string;
+  about?: string;
+  topics: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface Message {
   _id: string;
@@ -37,22 +57,6 @@ interface Message {
   isMe?: boolean;
 }
 
-interface Community {
-  _id: string;
-  communityName: string;
-  slug: string;
-  totalMembers: number;
-  onlineMembers: number;
-  createdBy: MemberRef;
-  joinedMembers: MemberRef[];
-  admins: MemberRef[];
-  pendingRequests: MemberRef[];
-  file?: string;
-  about?: string;
-  topics: string[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 function normalizeId(value: MemberRef | undefined | null): string {
   if (!value) return "";

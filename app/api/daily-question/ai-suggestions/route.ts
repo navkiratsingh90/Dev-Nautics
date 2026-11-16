@@ -174,7 +174,7 @@ Return ONLY valid JSON:
 
     // 7. Call Gemini API
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+    const model = "gemini-3.6-flash";
 
     if (!apiKey) {
       return NextResponse.json(
