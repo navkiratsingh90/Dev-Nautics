@@ -54,7 +54,6 @@ export interface IUser extends Document {
   workExperience?: IWorkExperience[];
 
   skills?: ISkills;
-
   projects?: IProject[];
 
   totalPendingRequests?: Types.ObjectId[];
@@ -173,7 +172,6 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 0,
     },
-
     isVerified: {
       type: Boolean,
       default: false,

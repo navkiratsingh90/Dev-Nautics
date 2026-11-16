@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -5,10 +6,11 @@ import axios from "axios";
 import {
   Zap, Trophy, Flame, Star, Code2, Target, ChevronRight,
   CheckCircle, Clock, Terminal, BarChart3, Calendar,
-  Filter, X, ChevronLeft,
+  Filter, X, ChevronLeft, Sparkles, RefreshCw,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────
+
 interface Question {
   _id: string;
   category: "aptitude" | "cs_fundamental" | "puzzle" | "dsa" | "pseudo";
@@ -28,6 +30,14 @@ interface Submission {
   pointsEarned: number;
 }
 
+interface AISuggestion {
+  hint: string;
+  concept: string;
+  approach: string;
+  commonMistake: string;
+  relatedQuestion: string;
+}
+
 const CATEGORIES = [
   { key: "all", label: "All" },
   { key: "aptitude", label: "Aptitude" },
@@ -37,7 +47,8 @@ const CATEGORIES = [
   { key: "pseudo", label: "Pseudo Code" },
 ];
 
-// ─── Helper Components (styled with the new theme) ────────────────────
+// ─── Helper Components ──────────────────────────────────────────────────
+
 function CategoryBadge({ category }: { category: string }) {
   const colors: Record<string, string> = {
     aptitude: "bg-cyan-50 text-cyan-700 border-cyan-200",
@@ -46,7 +57,9 @@ function CategoryBadge({ category }: { category: string }) {
     puzzle: "bg-amber-50 text-amber-700 border-amber-200",
     pseudo: "bg-orange-50 text-orange-700 border-orange-200",
   };
+
   const cls = colors[category] || "bg-gray-50 text-gray-600 border-gray-200";
+
   return (
     <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${cls} uppercase tracking-wider`}>
       {category}
@@ -55,6 +68,7 @@ function CategoryBadge({ category }: { category: string }) {
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────
+
 export default function DailyQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,15 +78,31 @@ export default function DailyQuestionsPage() {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [score, setScore] = useState(0);
-  const [submissionData, setSubmissionData] = useState<Record<string, { selectedOption: string; isCorrect: boolean; explanation?: string; pointsEarned: number }>>({});
+
+  const [submissionData, setSubmissionData] = useState<
+    Record<string, {
+      selectedOption: string;
+      isCorrect: boolean;
+      explanation?: string;
+      pointsEarned: number;
+    }>
+  >({});
+
+  // ─── AI States ────────────────────────────────────────────────────────
+
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null);
+  const [aiError, setAiError] = useState("");
 
   // ── Fetch questions ──────────────────────────────────────────────────
+
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         setLoading(true);
-        let url = "/api/daily-question";
-        const { data } = await axios.get(url);
+
+        const { data } = await axios.get("/api/daily-question");
+
         if (data.success) {
           setQuestions(data.data);
           setCurrentIndex(0);
@@ -89,20 +119,26 @@ export default function DailyQuestionsPage() {
         setLoading(false);
       }
     };
+
     fetchQuestions();
   }, [viewMode, selectedCategory]);
 
   // ── Fetch user submissions ──────────────────────────────────────────
+
   const fetchSubmissions = async (questionsList: Question[]) => {
     try {
       const { data } = await axios.get("/api/submissions");
+
       if (data.success) {
         const submissions = data.data as Submission[];
         const subMap: Record<string, any> = {};
+
         submissions.forEach((sub: Submission) => {
           const qId: any = sub.question?._id || sub.question;
+
           if (qId) {
             const question = questionsList.find(q => q._id === qId);
+
             subMap[qId] = {
               selectedOption: sub.selectedOption,
               isCorrect: sub.isCorrect,
@@ -111,13 +147,17 @@ export default function DailyQuestionsPage() {
             };
           }
         });
+
         setSubmissionData(subMap);
+
         const newSelected: Record<string, string> = {};
         const newRevealed: Record<string, boolean> = {};
+
         Object.keys(subMap).forEach(qId => {
           newSelected[qId] = subMap[qId].selectedOption;
           newRevealed[qId] = true;
         });
+
         setSelectedAnswers(newSelected);
         setRevealed(newRevealed);
       }
@@ -127,17 +167,30 @@ export default function DailyQuestionsPage() {
   };
 
   // ── Submission handler ─────────────────────────────────────────────
+
   const handleOptionSelect = async (questionId: string, optionLabel: string) => {
     if (revealed[questionId] || submissionData[questionId]) return;
+
     try {
       const response = await axios.post("/api/submissions", {
         questionId,
         selectedOption: optionLabel,
       });
+
       const data = response.data.data;
-      setSelectedAnswers(prev => ({ ...prev, [questionId]: optionLabel }));
-      setRevealed(prev => ({ ...prev, [questionId]: true }));
+
+      setSelectedAnswers(prev => ({
+        ...prev,
+        [questionId]: optionLabel,
+      }));
+
+      setRevealed(prev => ({
+        ...prev,
+        [questionId]: true,
+      }));
+
       const question = questions.find(q => q._id === questionId);
+
       setSubmissionData(prev => ({
         ...prev,
         [questionId]: {
@@ -147,6 +200,7 @@ export default function DailyQuestionsPage() {
           explanation: question?.explanation || "",
         },
       }));
+
       if (data.isCorrect) {
         setScore(prev => prev + data.pointsEarned);
       }
@@ -156,27 +210,96 @@ export default function DailyQuestionsPage() {
   };
 
   // ── Calculate score ─────────────────────────────────────────────────
+
   useEffect(() => {
     let correct = 0;
+
     questions.forEach(q => {
-      if (selectedAnswers[q._id] && selectedAnswers[q._id] === q.correctOption) {
+      if (
+        selectedAnswers[q._id] &&
+        selectedAnswers[q._id] === q.correctOption
+      ) {
         correct++;
       }
     });
+
     setScore(correct);
   }, [selectedAnswers, questions]);
 
   const total = questions.length;
   const currentQ = questions[currentIndex] || null;
 
-  const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); };
-  const handleNext = () => { if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1); };
+  // ─── AI Suggestions API Call ─────────────────────────────────────────
+
+ 
+const handleAISuggestions = async () => {
+  if (!currentQ || aiLoading) return;
+
+  try {
+    setAiLoading(true);
+    setAiError("");
+    setAiSuggestion(null);
+
+    const mode = revealed[currentQ._id] ? "review" : "hint";
+
+    const { data } = await axios.post(
+      "/api/daily-question/ai-suggestions",
+      {
+        questionId: currentQ._id,
+        mode,
+        selectedOption:
+          mode === "review"
+            ? selectedAnswers[currentQ._id]
+            : undefined,
+      }
+    );
+
+    if (data.success) {
+      setAiSuggestion(data.data);
+    } else {
+      setAiError(data.message || "Unable to generate suggestions");
+    }
+
+  } catch (error: any) {
+    console.error("AI Suggestions Error:", error);
+
+    setAiError(
+      error.response?.data?.message ||
+      "Something went wrong. Please try again."
+    );
+  } finally {
+    setAiLoading(false);
+  }
+};
+
+
+  // ─── Reset AI on question change ─────────────────────────────────────
+
+  useEffect(() => {
+    setAiSuggestion(null);
+    setAiError("");
+  }, [currentQ?._id]);
+
+  // ─── Navigation ──────────────────────────────────────────────────────
+
+  const handlePrev = () => {
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  };
+
+  const handleNext = () => {
+    if (currentIndex < total - 1) setCurrentIndex(currentIndex + 1);
+  };
+
   const resetQuiz = () => {
     setSelectedAnswers({});
     setRevealed({});
     setSubmissionData({});
     setCurrentIndex(0);
+    setAiSuggestion(null);
+    setAiError("");
   };
+
+  // ─── Loading ─────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -186,16 +309,22 @@ export default function DailyQuestionsPage() {
     );
   }
 
+  // ─── Empty State ─────────────────────────────────────────────────────
+
   if (!currentQ && total === 0) {
     return (
       <div className="bg-[#F8FAFB] min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-3">{viewMode === "today" ? "📅" : "📭"}</div>
+          <div className="text-4xl mb-3">
+            {viewMode === "today" ? "📅" : "📭"}
+          </div>
+
           <p className="text-sm text-[#64748B]">
             {viewMode === "today"
               ? "No question scheduled for today. Check back tomorrow!"
               : "No questions found for this category."}
           </p>
+
           {viewMode === "today" && (
             <button
               onClick={() => setViewMode("all")}
@@ -209,36 +338,50 @@ export default function DailyQuestionsPage() {
     );
   }
 
-  const hasSubmitted = !!submissionData[currentQ?._id];
+  const hasSubmitted = !!submissionData[currentQ._id];
   const isAnswered = revealed[currentQ._id] !== undefined;
   const selectedOption = selectedAnswers[currentQ._id];
-  const isCorrect = isAnswered && selectedOption === currentQ.correctOption;
-  const submissionInfo = submissionData[currentQ?._id];
+
+  const isCorrect =
+    isAnswered && selectedOption === currentQ.correctOption;
+
+  const submissionInfo = submissionData[currentQ._id];
+
+  // ─── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="bg-[#F8FAFB] min-h-screen py-8 px-4 sm:px-6 font-['Inter',-apple-system,BlinkMacSystemFont,sans-serif]">
       <div className="max-w-4xl mx-auto">
 
         {/* ── Header ────────────────────────────────────────────────── */}
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <div className="inline-flex items-center gap-1.5 bg-[#EDF7F3] border border-[#A7F3D0] rounded-full py-1 px-3 mb-3 text-xs font-medium text-[#047857]">
-              <Code2 className="w-3 h-3 text-[#0EA472]" /> daily-questions.devnautics.io
+              <Code2 className="w-3 h-3 text-[#0EA472]" />
+              daily-questions.devnautics.io
             </div>
+
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-extrabold tracking-tight text-[#0D1B2A]">
                 {viewMode === "today" ? "Today's Question" : "All Questions"}
               </h1>
             </div>
+
             {viewMode === "today" && (
               <p className="text-sm text-[#64748B] mt-1">
-                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
               </p>
             )}
           </div>
         </div>
 
-        {/* ── Category filters (only in "all" mode) ────────────── */}
+        {/* ── Category filters ──────────────────────────────────────── */}
+
         {viewMode === "all" && (
           <div className="flex flex-wrap gap-2 mb-6">
             {CATEGORIES.map((cat) => (
@@ -258,17 +401,24 @@ export default function DailyQuestionsPage() {
         )}
 
         {/* ── Question Card ────────────────────────────────────────── */}
+
         <div className="bg-white border border-[#E8EDF2] rounded-2xl overflow-hidden shadow-sm">
           <div className="p-5">
+
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <CategoryBadge category={currentQ.category} />
-                <span className="text-xs font-mono text-[#64748B]">#{currentQ._id.slice(-6)}</span>
+
+                <span className="text-xs font-mono text-[#64748B]">
+                  #{currentQ._id.slice(-6)}
+                </span>
+
                 {viewMode === "today" && (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#EDF7F3] text-[#0EA472] border border-[#A7F3D0]">
                     Today's Pick
                   </span>
                 )}
+
                 {hasSubmitted && (
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
                     submissionInfo?.isCorrect
@@ -279,27 +429,40 @@ export default function DailyQuestionsPage() {
                   </span>
                 )}
               </div>
+
               <span className="text-xs text-[#64748B]">
-                {isAnswered ? (isCorrect ? "✅ Correct" : "❌ Incorrect") : "❓ Not answered"}
+                {isAnswered
+                  ? (isCorrect ? "✅ Correct" : "❌ Incorrect")
+                  : "❓ Not answered"}
               </span>
             </div>
 
             {/* Question text */}
+
             <div className="mb-5">
               <p className="text-base font-medium text-[#0D1B2A] leading-relaxed">
                 {currentQ.question}
               </p>
+
               {currentQ.image && (
                 <div className="mt-4 rounded-xl overflow-hidden border border-[#E8EDF2]">
-                  <img src={currentQ.image} alt="Question" className="w-full max-h-64 object-cover" />
+                  <img
+                    src={currentQ.image}
+                    alt="Question"
+                    className="w-full max-h-64 object-cover"
+                  />
                 </div>
               )}
             </div>
 
             {/* Options */}
+
             <div className="space-y-2.5 mb-6">
               {["A", "B", "C", "D"].map((label, idx) => {
                 const opt = currentQ.options[idx];
+
+                if (opt === undefined) return null;
+
                 const isSelected = selectedOption === label;
                 const showCorrect = isAnswered && label === currentQ.correctOption;
                 const showWrong = isAnswered && isSelected && label !== currentQ.correctOption;
@@ -343,7 +506,9 @@ export default function DailyQuestionsPage() {
                     }`}>
                       {label}
                     </span>
+
                     <span className="flex-1">{opt}</span>
+
                     {showCorrect && <CheckCircle className="w-4 h-4 shrink-0 text-green-600" />}
                     {showWrong && <X className="w-4 h-4 shrink-0 text-red-600" />}
                   </button>
@@ -352,7 +517,9 @@ export default function DailyQuestionsPage() {
             </div>
 
             {/* Explanation */}
-            {(isAnswered || hasSubmitted) && (currentQ.explanation || submissionInfo?.explanation) && (
+
+            {(isAnswered || hasSubmitted) &&
+              (currentQ.explanation || submissionInfo?.explanation) && (
               <div className={`p-4 rounded-xl text-sm mb-4 border ${
                 (isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect)
                   ? "bg-green-50 border-green-200"
@@ -363,10 +530,18 @@ export default function DailyQuestionsPage() {
                     ? "text-green-700"
                     : "text-red-700"
                 }`}>
-                  {(isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect) ? "✅ Correct" : "❌ Incorrect"}
-                  {submissionInfo?.pointsEarned && submissionInfo.pointsEarned > 0 && ` (+${submissionInfo.pointsEarned} pts)`}
+                  {(isAnswered && isCorrect) || (hasSubmitted && submissionInfo?.isCorrect)
+                    ? "✅ Correct"
+                    : "❌ Incorrect"}
+
+                  {submissionInfo?.pointsEarned && submissionInfo.pointsEarned > 0 &&
+                    ` (+${submissionInfo.pointsEarned} pts)`}
                 </p>
-                <p className="text-[#64748B] text-xs">{currentQ.explanation || submissionInfo?.explanation || ""}</p>
+
+                <p className="text-[#64748B] text-xs">
+                  {currentQ.explanation || submissionInfo?.explanation || ""}
+                </p>
+
                 {hasSubmitted && (
                   <p className="text-xs text-[#64748B] mt-2">
                     You already submitted this question. {submissionInfo?.isCorrect ? "Great job!" : "Keep practicing!"}
@@ -374,22 +549,116 @@ export default function DailyQuestionsPage() {
                 )}
               </div>
             )}
+
+            {/* ─── AI Suggestions Button and Response ─────────────── */}
+
+            <div className="mt-4">
+
+              
+<button
+  onClick={handleAISuggestions}
+  disabled={aiLoading}
+  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0D1B2A] text-white text-sm font-medium hover:bg-[#1E3A5F] disabled:opacity-60 transition"
+>
+  <Sparkles className="w-4 h-4" />
+
+  {aiLoading
+    ? "Generating..."
+    : revealed[currentQ._id]
+      ? "Get AI Review"
+      : "Get AI Hint"}
+</button>
+
+
+              {aiError && (
+                <p className="mt-3 text-sm text-red-600">
+                  {aiError}
+                </p>
+              )}
+
+              {aiSuggestion && (
+                <div className="mt-4 p-4 rounded-xl border border-[#E8EDF2] bg-[#F8FAFB] space-y-3">
+
+                  <h3 className="text-sm font-semibold text-[#0D1B2A] flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-violet-600" />
+                    AI Suggestions
+                  </h3>
+
+                  <div>
+                    <p className="text-xs font-semibold text-[#0D1B2A] mb-1">
+                      Hint
+                    </p>
+                    <p className="text-sm text-[#64748B]">
+                      {aiSuggestion.hint}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-[#0D1B2A] mb-1">
+                      Concept
+                    </p>
+                    <p className="text-sm text-[#64748B]">
+                      {aiSuggestion.concept}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-[#0D1B2A] mb-1">
+                      Solution Approach
+                    </p>
+                    <p className="text-sm text-[#64748B]">
+                      {aiSuggestion.approach}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-[#0D1B2A] mb-1">
+                      Common Mistake
+                    </p>
+                    <p className="text-sm text-[#64748B]">
+                      {aiSuggestion.commonMistake}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-[#0D1B2A] mb-1">
+                      Related Practice Question
+                    </p>
+                    <p className="text-sm text-[#64748B]">
+                      {aiSuggestion.relatedQuestion}
+                    </p>
+                  </div>
+
+                </div>
+              )}
+
+            </div>
+
           </div>
         </div>
 
         {/* ── Stats ───────────────────────────────────────────────── */}
+
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: "Attempted", value: Object.keys(revealed).length, color: "text-cyan-600" },
             { label: "Correct", value: score, color: "text-green-600" },
             { label: "Incorrect", value: Object.keys(revealed).length - score, color: "text-red-600" },
-            { label: "Accuracy", value: Object.keys(revealed).length > 0
+            {
+              label: "Accuracy",
+              value: Object.keys(revealed).length > 0
                 ? Math.round((score / Object.keys(revealed).length) * 100) + "%"
-                : "—", color: "text-amber-600" },
+                : "—",
+              color: "text-amber-600",
+            },
           ].map((stat) => (
             <div key={stat.label} className="bg-white border border-[#E8EDF2] rounded-xl p-4 text-center shadow-sm">
-              <div className={`text-2xl font-mono font-bold ${stat.color}`}>{stat.value}</div>
-              <div className="text-xs text-[#64748B] mt-1">{stat.label}</div>
+              <div className={`text-2xl font-mono font-bold ${stat.color}`}>
+                {stat.value}
+              </div>
+              <div className="text-xs text-[#64748B] mt-1">
+                {stat.label}
+              </div>
             </div>
           ))}
         </div>

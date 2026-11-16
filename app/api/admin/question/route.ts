@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!user.isAdmin) {
+    if (user.role != 'admin') {
       return NextResponse.json(
         {
           success: false,

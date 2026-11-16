@@ -15,12 +15,12 @@ export async function GET(req: NextRequest) {
   try {
     await connectDb();
 
-    // // if (!(await isAdm/in())) {
-    //   return NextResponse.json(
-    //     { success: false, message: "Unauthorized. Admin access required." },
-    //     { status: 403 }
-    //   );
-    // }
+    if (!(await isAdmin())) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized. Admin access required." },
+        { status: 403 }
+      );
+    }
 	
     // ── Last 7 days (UTC) ──────────────────────────────────────────
     const endDate = new Date();

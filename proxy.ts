@@ -1,3 +1,4 @@
+
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
@@ -6,22 +7,26 @@ export const proxy = auth((req) => {
   const user = req.auth?.user;
 
   const isLoggedIn = !!user;
+  const userId = user?.id;
+  const userRole = user?.role;
 
+  // Authentication routes
   const isAuthRoute =
     pathname === "/sign-in" ||
     pathname === "/sign-up" ||
     pathname.startsWith("/otp");
 
+  // Admin routes
   const isAdminRoute =
     pathname === "/admin" ||
     pathname.startsWith("/admin/");
 
-  // Only these routes are accessible without login
+  // Public routes
   const isPublicRoute =
     pathname === "/" ||
     isAuthRoute;
 
-  // Admin protection
+  // 1. Protect admin routes
   if (isAdminRoute) {
     if (!isLoggedIn) {
       return NextResponse.redirect(
@@ -29,23 +34,23 @@ export const proxy = auth((req) => {
       );
     }
 
-    if (user.role !== "admin") {
+    if (userRole !== "admin") {
       return NextResponse.redirect(
-        new URL(`/${user.id}`, req.url)
+        new URL(userId ? `/${userId}` : "/", req.url)
       );
     }
 
     return NextResponse.next();
   }
 
-  // Logged-in user cannot access auth pages
+  // 2. Prevent logged-in users from accessing auth pages
   if (isLoggedIn && isAuthRoute) {
     return NextResponse.redirect(
-      new URL(`/${user.id}`, req.url)
+      new URL(userId ? `/${userId}` : "/", req.url)
     );
   }
 
-  // Everything except public routes requires login
+  // 3. Protect all private routes
   if (!isPublicRoute && !isLoggedIn) {
     return NextResponse.redirect(
       new URL("/sign-in", req.url)

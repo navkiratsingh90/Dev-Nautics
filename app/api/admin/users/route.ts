@@ -16,13 +16,13 @@ export async function GET(req: NextRequest) {
   try {
     await connectDb();
 
-    // // Admin check
-    // if (!(await isAdmin())) {
-    //   return NextResponse.json(
-    //     { success: false, message: "Unauthorized. Admin access required." },
-    //     { status: 403 }
-    //   );
-    // }
+    // Admin check
+    if (!(await isAdmin())) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized. Admin access required." },
+        { status: 403 }
+      );
+    }
 
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || "";

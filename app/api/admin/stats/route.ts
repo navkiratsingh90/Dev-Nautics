@@ -18,9 +18,9 @@ export async function GET() {
     }
 
     const user = await User.findOne({ email: session.user.email });
-    // if (user?.role !== "admin") {
-    //   return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
-    // }
+    if (user?.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
+    }
 
     const [
       totalUsers,
